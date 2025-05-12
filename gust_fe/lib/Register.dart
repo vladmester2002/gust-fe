@@ -1,66 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:gust_fe/Register.dart';
-import 'package:gust_fe/forgot_password.dart';
 
-// Define route names
-class AppRoutes {
-  static const String login = '/';
-  static const String register = '/register';
-  static const String forgotPassword = '/forgot-password';
-}
-
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class RegisterPage extends StatefulWidget {
+  const RegisterPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Login Page',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      initialRoute: AppRoutes.login,
-      routes: {
-        AppRoutes.login: (context) => const LoginPage(),
-        AppRoutes.register: (context) => const RegisterPage(),
-        AppRoutes.forgotPassword: (context) => const ForgotPasswordPage(),
-      },
-    );
-  }
+  State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
-
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
-
-class _LoginPageState extends State<LoginPage> {
+class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  void _login() {
-    if (_formKey.currentState?.validate() ?? false) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Login Successful')),
-      );
-    }
-  }
-
   void _register() {
-    Navigator.pushNamed(context, AppRoutes.register);
-  }
-
-  void _forgotPassword() {
-    Navigator.pushNamed(context, AppRoutes.forgotPassword);
+    if (_formKey.currentState?.validate() ?? false) {
+      // Perform registration logic here
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Registration Successful (Placeholder)')),
+      );
+      // Optionally navigate back to login or to a home page
+      // Navigator.pop(context); // Example: go back
+    }
   }
 
   @override
@@ -69,7 +31,13 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: theme.colorScheme.inversePrimary,
-        title: const Text('GUST Login'),
+        title: const Text('GUST Register'),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.of(context).pop();
+          },
+        ),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -89,9 +57,9 @@ class _LoginPageState extends State<LoginPage> {
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
                       Text(
-                        'GUST',
+                        'Create Account',
                         style: TextStyle(
-                          fontSize: 48,
+                          fontSize: 32,
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.primary,
                         ),
@@ -106,17 +74,41 @@ class _LoginPageState extends State<LoginPage> {
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10.0),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 10.0),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
                         ),
                         style: TextStyle(fontSize: 14),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'Please enter your username';
+                            return 'Please enter a username';
                           }
                           return null;
                         },
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          labelStyle: TextStyle(fontSize: 14),
+                          prefixIcon: Icon(Icons.email_outlined, color: theme.colorScheme.primary, size: 20),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10.0),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
+                        ),
+                        style: TextStyle(fontSize: 14),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter an email';
+                          }
+                          if (!value.contains('@')) {
+                            return 'Please enter a valid email';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
                       TextFormField(
                         controller: _passwordController,
                         obscureText: true,
@@ -127,15 +119,39 @@ class _LoginPageState extends State<LoginPage> {
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10.0),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 10.0),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
                         ),
                         style: TextStyle(fontSize: 14),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'Please enter your password';
+                            return 'Please enter a password';
                           }
                           if (value.length < 6) {
                             return 'Password must be at least 6 characters';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _confirmPasswordController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: 'Confirm Password',
+                          labelStyle: TextStyle(fontSize: 14),
+                          prefixIcon: Icon(Icons.lock_reset_outlined, color: theme.colorScheme.primary, size: 20),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10.0),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
+                        ),
+                        style: TextStyle(fontSize: 14),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please confirm your password';
+                          }
+                          if (value != _passwordController.text) {
+                            return 'Passwords do not match';
                           }
                           return null;
                         },
@@ -151,28 +167,17 @@ class _LoginPageState extends State<LoginPage> {
                             borderRadius: BorderRadius.circular(12.0),
                           ),
                         ),
-                        onPressed: _login,
-                        child: const Text('Login'),
+                        onPressed: _register,
+                        child: const Text('Register'),
                       ),
                       const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          TextButton(
-                            onPressed: _register,
-                            child: Text(
-                              'Create Account',
-                              style: TextStyle(color: theme.colorScheme.secondary),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
                       TextButton(
-                        onPressed: _forgotPassword,
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                        },
                         child: Text(
-                          'Forgot Password?',
-                          style: TextStyle(color: theme.colorScheme.outline),
+                          'Already have an account? Login',
+                          style: TextStyle(color: theme.colorScheme.secondary),
                         ),
                       ),
                     ],
