@@ -1,16 +1,19 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:gust_fe/Register.dart';
 import 'package:gust_fe/forgot_password.dart';
+import 'package:gust_fe/home_page.dart';
 
-// Define route names
+void main() {
+  runApp(const MyApp());
+}
+
 class AppRoutes {
   static const String login = '/';
   static const String register = '/register';
   static const String forgotPassword = '/forgot-password';
-}
-
-void main() {
-  runApp(const MyApp());
+  static const String home = '/home';
 }
 
 class MyApp extends StatelessWidget {
@@ -19,7 +22,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Login Page',
+      title: 'GUST App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
@@ -30,6 +33,7 @@ class MyApp extends StatelessWidget {
         AppRoutes.login: (context) => const LoginPage(),
         AppRoutes.register: (context) => const RegisterPage(),
         AppRoutes.forgotPassword: (context) => const ForgotPasswordPage(),
+        AppRoutes.home: (context) => const HomePage(),
       },
     );
   }
@@ -47,21 +51,44 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  void _login() {
-    if (_formKey.currentState?.validate() ?? false) {
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final url = Uri.parse('http://192.168.1.111:8080/api/auth/login');
+    final headers = {'Content-Type': 'application/json'};
+    final body = jsonEncode({
+      'email': _usernameController.text.trim(),
+      'password': _passwordController.text.trim(),
+    });
+
+    try {
+      final response = await http.post(url, headers: headers, body: body);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final token = data['token'];
+
+        // TODO: Save token securely using flutter_secure_storage or SharedPreferences
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Login successful!')),
+        );
+
+        Navigator.pushNamedAndRemoveUntil(context, AppRoutes.home, (_) => false);
+      } else {
+        final message = jsonDecode(response.body)['message'] ?? 'Login failed';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $message')),
+        );
+      }
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Login Successful')),
+        SnackBar(content: Text('Network error: $e')),
       );
     }
   }
 
-  void _register() {
-    Navigator.pushNamed(context, AppRoutes.register);
-  }
-
-  void _forgotPassword() {
-    Navigator.pushNamed(context, AppRoutes.forgotPassword);
-  }
+  void _register() => Navigator.pushNamed(context, AppRoutes.register);
+  void _forgotPassword() => Navigator.pushNamed(context, AppRoutes.forgotPassword);
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +112,6 @@ class _LoginPageState extends State<LoginPage> {
                 child: Form(
                   key: _formKey,
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
                       Text(
@@ -100,80 +126,53 @@ class _LoginPageState extends State<LoginPage> {
                       TextFormField(
                         controller: _usernameController,
                         decoration: InputDecoration(
-                          labelText: 'Username',
-                          labelStyle: TextStyle(fontSize: 14),
-                          prefixIcon: Icon(Icons.person_outline, color: theme.colorScheme.primary, size: 20),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10.0),
-                          ),
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.email_outlined, color: theme.colorScheme.primary),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0)),
                           contentPadding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 10.0),
                         ),
-                        style: TextStyle(fontSize: 14),
+                        keyboardType: TextInputType.emailAddress,
                         validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your username';
-                          }
+                          if (value == null || value.isEmpty) return 'Please enter your email';
+                          if (!value.contains('@')) return 'Invalid email format';
                           return null;
                         },
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       TextFormField(
                         controller: _passwordController,
                         obscureText: true,
                         decoration: InputDecoration(
                           labelText: 'Password',
-                          labelStyle: TextStyle(fontSize: 14),
-                          prefixIcon: Icon(Icons.lock_outline, color: theme.colorScheme.primary, size: 20),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10.0),
-                          ),
+                          prefixIcon: Icon(Icons.lock_outline, color: theme.colorScheme.primary),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0)),
                           contentPadding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 10.0),
                         ),
-                        style: TextStyle(fontSize: 14),
                         validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your password';
-                          }
-                          if (value.length < 6) {
-                            return 'Password must be at least 6 characters';
-                          }
+                          if (value == null || value.isEmpty) return 'Please enter your password';
+                          if (value.length < 6) return 'Password must be at least 6 characters';
                           return null;
                         },
                       ),
                       const SizedBox(height: 24),
                       ElevatedButton(
+                        onPressed: _login,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: theme.colorScheme.primary,
                           foregroundColor: theme.colorScheme.onPrimary,
                           padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.0),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
                         ),
-                        onPressed: _login,
                         child: const Text('Login'),
                       ),
                       const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          TextButton(
-                            onPressed: _register,
-                            child: Text(
-                              'Create Account',
-                              style: TextStyle(color: theme.colorScheme.secondary),
-                            ),
-                          ),
-                        ],
+                      TextButton(
+                        onPressed: _register,
+                        child: Text('Create Account', style: TextStyle(color: theme.colorScheme.secondary)),
                       ),
-                      const SizedBox(height: 8),
                       TextButton(
                         onPressed: _forgotPassword,
-                        child: Text(
-                          'Forgot Password?',
-                          style: TextStyle(color: theme.colorScheme.outline),
-                        ),
+                        child: Text('Forgot Password?', style: TextStyle(color: theme.colorScheme.outline)),
                       ),
                     ],
                   ),

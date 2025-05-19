@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -14,14 +16,34 @@ class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  void _register() {
+  Future<void> _register() async {
     if (_formKey.currentState?.validate() ?? false) {
-      // Perform registration logic here
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Registration Successful (Placeholder)')),
-      );
-      // Optionally navigate back to login or to a home page
-      // Navigator.pop(context); // Example: go back
+      final url = Uri.parse('http://192.168.1.111:8080/api/auth/register'); // Use your actual IP for device testing
+      final headers = {'Content-Type': 'application/json'};
+      final body = jsonEncode({
+        'fullName': _usernameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'password': _passwordController.text.trim(),
+      });
+
+      try {
+        final response = await http.post(url, headers: headers, body: body);
+
+        if (response.statusCode == 200) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Registration successful!')),
+          );
+          Navigator.of(context).pop(); // Optionally navigate to login
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: ${response.body}')),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Network error: $e')),
+        );
+      }
     }
   }
 
@@ -33,7 +55,7 @@ class _RegisterPageState extends State<RegisterPage> {
         backgroundColor: theme.colorScheme.inversePrimary,
         title: const Text('GUST Register'),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () {
             Navigator.of(context).pop();
           },
@@ -69,14 +91,14 @@ class _RegisterPageState extends State<RegisterPage> {
                         controller: _usernameController,
                         decoration: InputDecoration(
                           labelText: 'Username',
-                          labelStyle: TextStyle(fontSize: 14),
+                          labelStyle: const TextStyle(fontSize: 14),
                           prefixIcon: Icon(Icons.person_outline, color: theme.colorScheme.primary, size: 20),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10.0),
                           ),
                           contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
                         ),
-                        style: TextStyle(fontSize: 14),
+                        style: const TextStyle(fontSize: 14),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Please enter a username';
@@ -89,14 +111,14 @@ class _RegisterPageState extends State<RegisterPage> {
                         controller: _emailController,
                         decoration: InputDecoration(
                           labelText: 'Email',
-                          labelStyle: TextStyle(fontSize: 14),
+                          labelStyle: const TextStyle(fontSize: 14),
                           prefixIcon: Icon(Icons.email_outlined, color: theme.colorScheme.primary, size: 20),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10.0),
                           ),
                           contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
                         ),
-                        style: TextStyle(fontSize: 14),
+                        style: const TextStyle(fontSize: 14),
                         keyboardType: TextInputType.emailAddress,
                         validator: (value) {
                           if (value == null || value.isEmpty) {
@@ -114,14 +136,14 @@ class _RegisterPageState extends State<RegisterPage> {
                         obscureText: true,
                         decoration: InputDecoration(
                           labelText: 'Password',
-                          labelStyle: TextStyle(fontSize: 14),
+                          labelStyle: const TextStyle(fontSize: 14),
                           prefixIcon: Icon(Icons.lock_outline, color: theme.colorScheme.primary, size: 20),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10.0),
                           ),
                           contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
                         ),
-                        style: TextStyle(fontSize: 14),
+                        style: const TextStyle(fontSize: 14),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Please enter a password';
@@ -138,14 +160,14 @@ class _RegisterPageState extends State<RegisterPage> {
                         obscureText: true,
                         decoration: InputDecoration(
                           labelText: 'Confirm Password',
-                          labelStyle: TextStyle(fontSize: 14),
+                          labelStyle: const TextStyle(fontSize: 14),
                           prefixIcon: Icon(Icons.lock_reset_outlined, color: theme.colorScheme.primary, size: 20),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10.0),
                           ),
                           contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
                         ),
-                        style: TextStyle(fontSize: 14),
+                        style: const TextStyle(fontSize: 14),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Please confirm your password';
