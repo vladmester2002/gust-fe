@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:gust_fe/SugarLog.dart';
+import 'package:gust_fe/SugarStatsPage.dart';
 import 'package:http/http.dart' as http;
 import 'package:gust_fe/Register.dart';
 import 'package:gust_fe/forgot_password.dart';
@@ -18,6 +19,7 @@ class AppRoutes {
   static const String forgotPassword = '/forgot-password';
   static const String home = '/home';
   static const String testPage = '/test-page';
+  static const String testStats = '/test-stats';
 
 }
 
@@ -136,6 +138,7 @@ class MyApp extends StatelessWidget {
         AppRoutes.forgotPassword: (context) => const ForgotPasswordPage(),
         AppRoutes.home: (context) => const HomePage(),
         AppRoutes.testPage: (context) => SugarLogPage(logs: mockLogs),
+        AppRoutes.testStats: (context) => SugarStatsPage(logs: mockLogs),
       },
     );
   }
@@ -192,6 +195,7 @@ class _LoginPageState extends State<LoginPage> {
   void _register() => Navigator.pushNamed(context, AppRoutes.register);
   void _forgotPassword() => Navigator.pushNamed(context, AppRoutes.forgotPassword);
   void _testUser() => Navigator.pushNamed(context, AppRoutes.testPage);
+  void _testStats() => Navigator.pushNamed(context, AppRoutes.testStats);
 
   @override
   Widget build(BuildContext context) {
@@ -280,6 +284,10 @@ class _LoginPageState extends State<LoginPage> {
                       TextButton(
                         onPressed: _testUser,
                         child: Text('TEST USER', style: TextStyle(color: theme.colorScheme.outline)),
+                      ),
+                      TextButton(
+                        onPressed: _testStats,
+                        child: Text('TEST STATS', style: TextStyle(color: theme.colorScheme.outline)),
                       ),
                     ],
                   ),
