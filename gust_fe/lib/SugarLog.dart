@@ -1,3 +1,5 @@
+import 'package:gust_fe/SugarLogPage.dart';
+
 class SugarLog {
   final int id;
   final int sugarGrams;
@@ -7,7 +9,7 @@ class SugarLog {
   final String productName;
   final String sugarType;
   final String contextNote;
-  final String emotion;
+  final Emotion emotion;
   final String location;
   final bool wasCraving;
 
