@@ -79,7 +79,13 @@ class SugarLogPage extends StatelessWidget {
         children: [
           Expanded(
             child: ListTile(
-              title: Text(log.productName),
+              title: Text(
+              log.productName,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
               subtitle: Text(
                 '${log.sugarGrams}g at ${log.hour.toString().padLeft(2, '0')}:${log.minute.toString().padLeft(2, '0')} – ${log.sugarType}\n${log.contextNote}\nMood: ${log.emotion.name.toUpperCase()} ${log.wasCraving ? "(Craving)" : ""}',
               ),
