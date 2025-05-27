@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:gust_fe/SugarLog.dart';
 import 'package:http/http.dart' as http;
 import 'package:gust_fe/Register.dart';
 import 'package:gust_fe/forgot_password.dart';
 import 'package:gust_fe/home_page.dart';
+
+import 'SugarLogPage.dart';
 
 void main() {
   runApp(const MyApp());
@@ -14,7 +17,52 @@ class AppRoutes {
   static const String register = '/register';
   static const String forgotPassword = '/forgot-password';
   static const String home = '/home';
+  static const String testPage = '/test-page';
+
 }
+
+final List<SugarLog> mockLogs = [
+  SugarLog(
+    id: 1,
+    sugarGrams: 25,
+    date: DateTime(2025, 5, 27),
+    hour: 9,
+    minute: 30,
+    productName: "Chocolate croissant",
+    sugarType: "Pastry",
+    contextNote: "Breakfast on the go",
+    emotion: "Happy",
+    location: "Bakery",
+    wasCraving: true,
+  ),
+  SugarLog(
+    id: 2,
+    sugarGrams: 15,
+    date: DateTime(2025, 5, 27),
+    hour: 13,
+    minute: 45,
+    productName: "Soda",
+    sugarType: "Drink",
+    contextNote: "Lunch with friends",
+    emotion: "Content",
+    location: "Restaurant",
+    wasCraving: false,
+  ),
+  SugarLog(
+    id: 3,
+    sugarGrams: 40,
+    date: DateTime(2025, 5, 26),
+    hour: 22,
+    minute: 15,
+    productName: "Ice cream",
+    sugarType: "Dessert",
+    contextNote: "Late night binge",
+    emotion: "Stressed",
+    location: "Home",
+    wasCraving: true,
+  ),
+];
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -34,6 +82,7 @@ class MyApp extends StatelessWidget {
         AppRoutes.register: (context) => const RegisterPage(),
         AppRoutes.forgotPassword: (context) => const ForgotPasswordPage(),
         AppRoutes.home: (context) => const HomePage(),
+        AppRoutes.testPage: (context) => SugarLogPage(logs: mockLogs),
       },
     );
   }
@@ -89,6 +138,7 @@ class _LoginPageState extends State<LoginPage> {
 
   void _register() => Navigator.pushNamed(context, AppRoutes.register);
   void _forgotPassword() => Navigator.pushNamed(context, AppRoutes.forgotPassword);
+  void _testUser() => Navigator.pushNamed(context, AppRoutes.testPage);
 
   @override
   Widget build(BuildContext context) {
@@ -173,6 +223,10 @@ class _LoginPageState extends State<LoginPage> {
                       TextButton(
                         onPressed: _forgotPassword,
                         child: Text('Forgot Password?', style: TextStyle(color: theme.colorScheme.outline)),
+                      ), 
+                      TextButton(
+                        onPressed: _testUser,
+                        child: Text('TEST USER', style: TextStyle(color: theme.colorScheme.outline)),
                       ),
                     ],
                   ),
