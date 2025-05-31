@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'constants.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -15,10 +16,12 @@ class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
 
   Future<void> _register() async {
     if (_formKey.currentState?.validate() ?? false) {
-      final url = Uri.parse('http://192.168.1.111:8080/api/auth/register'); // Use your actual IP for device testing
+      setState(() => _isLoading = true);
+      final url = Uri.parse('$baseUrl/api/auth/register');
       final headers = {'Content-Type': 'application/json'};
       final body = jsonEncode({
         'fullName': _usernameController.text.trim(),
@@ -28,23 +31,46 @@ class _RegisterPageState extends State<RegisterPage> {
 
       try {
         final response = await http.post(url, headers: headers, body: body);
+        setState(() => _isLoading = false);
 
         if (response.statusCode == 200) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Registration successful!')),
           );
           Navigator.of(context).pop(); // Optionally navigate to login
-        } else {
+        } else if (response.statusCode == 400) {
+          // Show server-side validation message if present
+          final message = _parseErrorMessage(response.body) ?? 'Bad request. Please check your input.';
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: ${response.body}')),
+            SnackBar(content: Text('Error: $message')),
+          );
+        } else if (response.statusCode == 409) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Account already exists.')),
+          );
+        } else {
+          final message = _parseErrorMessage(response.body) ?? 'Unexpected error (${response.statusCode}).';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $message')),
           );
         }
       } catch (e) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Network error: $e')),
         );
       }
     }
+  }
+
+  String? _parseErrorMessage(String responseBody) {
+    try {
+      final data = jsonDecode(responseBody);
+      if (data is Map && data['message'] != null) {
+        return data['message'].toString();
+      }
+    } catch (_) {}
+    return null;
   }
 
   @override
@@ -179,19 +205,21 @@ class _RegisterPageState extends State<RegisterPage> {
                         },
                       ),
                       const SizedBox(height: 24),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary,
-                          foregroundColor: theme.colorScheme.onPrimary,
-                          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12.0),
-                          ),
-                        ),
-                        onPressed: _register,
-                        child: const Text('Register'),
-                      ),
+                      _isLoading
+                          ? const CircularProgressIndicator()
+                          : ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: theme.colorScheme.primary,
+                                foregroundColor: theme.colorScheme.onPrimary,
+                                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12.0),
+                                ),
+                              ),
+                              onPressed: _isLoading ? null : _register,
+                              child: const Text('Register'),
+                            ),
                       const SizedBox(height: 16),
                       TextButton(
                         onPressed: () {

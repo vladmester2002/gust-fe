@@ -28,7 +28,3 @@ void main() {
     expect(find.text('1'), findsOneWidget);
   });
 }
-
-class MyApp {
-  const MyApp();
-}
