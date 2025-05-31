@@ -1,4 +1,4 @@
-import 'package:gust_fe/SugarLogPage.dart';
+import 'package:gust_fe/emotion.dart'; // <- only import from here!
 
 class SugarLog {
   final int id;
@@ -26,4 +26,22 @@ class SugarLog {
     required this.location,
     required this.wasCraving,
   });
+
+  factory SugarLog.fromJson(Map<String, dynamic> json) {
+    return SugarLog(
+      id: json['id'] as int,
+      sugarGrams: json['sugarGrams'] as int,
+      date: DateTime.parse(json['date']),
+      hour: json['hour'] as int,
+      minute: json['minute'] as int,
+      productName: json['productName'] ?? '',
+      sugarType: json['sugarType'] ?? '',
+      contextNote: json['contextNote'] ?? '',
+      emotion: Emotion.values.firstWhere(
+          (e) => e.name == (json['emotion'] as String).toUpperCase(),
+          orElse: () => Emotion.NEUTRAL),
+      location: json['location'] ?? '',
+      wasCraving: json['wasCraving'] as bool,
+    );
+  }
 }

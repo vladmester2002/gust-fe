@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'constants.dart'; // <-- Make sure you have this with baseUrl
+import 'package:shared_preferences/shared_preferences.dart'; // <-- NEW
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -34,7 +35,10 @@ class _LoginPageState extends State<LoginPage> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final token = data['token'];
-        // TODO: Save token securely
+
+        // Save token securely for further API use
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('jwt_token', token);
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Login successful!')),
