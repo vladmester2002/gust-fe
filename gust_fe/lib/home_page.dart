@@ -8,6 +8,7 @@ import 'emotion.dart';
 import 'constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sugar_log_creation_dialog.dart';
+import 'package:another_flushbar/flushbar.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.logs});
@@ -18,7 +19,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _currentIndex = 1;
   List<SugarLog> _logs = [];
   bool _loading = false;
   String? _fullName;
@@ -28,6 +28,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _logs = List.from(widget.logs); // So you see something before first fetch
     _loadUserProfile();
     _loadUserStreak();
     _fetchLogs();
@@ -36,6 +37,23 @@ class _HomePageState extends State<HomePage> {
   Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('jwt_token');
+  }
+
+  Future<void> _showFlushBar({
+    required String message,
+    required Color color,
+    IconData? icon,
+    Duration duration = const Duration(seconds: 2),
+  }) async {
+    await Flushbar<void>(
+      message: message,
+      duration: duration,
+      backgroundColor: color,
+      flushbarPosition: FlushbarPosition.TOP,
+      margin: const EdgeInsets.all(8),
+      borderRadius: BorderRadius.circular(8),
+      icon: icon != null ? Icon(icon, color: Colors.white) : null,
+    ).show(context);
   }
 
   Future<void> _loadUserProfile() async {
@@ -55,7 +73,7 @@ class _HomePageState extends State<HomePage> {
         });
       }
     } catch (e) {
-      // Handle error if needed
+      // Optionally: show error here with Flushbar
     }
   }
 
@@ -71,11 +89,11 @@ class _HomePageState extends State<HomePage> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
-          _streak = data['days'] ?? 0; // <-- FIXED: was 'streak'
+          _streak = data['days'] ?? 0;
         });
       }
     } catch (e) {
-      // Handle error if needed
+      // Optionally: show error here with Flushbar
     }
   }
 
@@ -121,12 +139,16 @@ class _HomePageState extends State<HomePage> {
                     if (resp.statusCode == 200) {
                       setState(() => _dailyGoal = newGoal!);
                       Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Daily goal updated!")),
+                      await _showFlushBar(
+                        message: "Daily goal updated!",
+                        color: Colors.green,
+                        icon: Icons.check_circle,
                       );
                     } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Failed to update goal: ${resp.body}")),
+                      await _showFlushBar(
+                        message: "Failed to update goal: ${resp.body}",
+                        color: Colors.red,
+                        icon: Icons.error,
                       );
                     }
                   }
@@ -145,8 +167,10 @@ class _HomePageState extends State<HomePage> {
     final token = await _getToken();
     if (token == null) {
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Not logged in. Please login again.')),
+      await _showFlushBar(
+        message: 'Not logged in. Please login again.',
+        color: Colors.red,
+        icon: Icons.error,
       );
       return;
     }
@@ -162,62 +186,54 @@ class _HomePageState extends State<HomePage> {
           _logs = data.map((e) => SugarLog.fromJson(e)).toList();
         });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not load logs: ${response.statusCode}')),
+        await _showFlushBar(
+          message: 'Could not load logs: ${response.statusCode}',
+          color: Colors.red,
+          icon: Icons.error,
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading logs: $e')),
+      await _showFlushBar(
+        message: 'Error loading logs: $e',
+        color: Colors.red,
+        icon: Icons.error,
       );
     } finally {
       setState(() => _loading = false);
     }
   }
 
-  void _onTabTapped(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
+  void _showRegisterModal({SugarLog? editLog}) async {
+  await showDialog(
+    context: context,
+    builder: (context) => SugarLogCreationDialog(
+      existingLog: editLog,
+      onCreated: (log) async {
+        setState(() {
+          _logs.add(log);
+        });
+        _loadUserStreak();
+        await _fetchLogs(); // <--- This line fetches latest logs after creation!
+      },
+      onUpdated: (log) {
+        setState(() {
+          final idx = _logs.indexWhere((l) => l.id == log.id);
+          if (idx != -1) _logs[idx] = log;
+        });
+        _loadUserStreak();
+      },
+      onDeleted: (log) {
+        setState(() {
+          _logs.removeWhere((l) => l.id == log.id);
+        });
+        _loadUserStreak();
+      },
+    ),
+  );
+  _loadUserStreak();
+        await _fetchLogs(); 
+}
 
-    if (index == 1) {
-      _showRegisterModal();
-    } else if (index == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Profile coming soon")),
-      );
-    } else if (index == 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Settings coming soon")),
-      );
-    }
-  }
-
-  void _showRegisterModal({SugarLog? editLog}) {
-    showDialog(
-      context: context,
-      builder: (context) => SugarLogCreationDialog(
-        existingLog: editLog,
-        onCreated: (log) {
-          setState(() {
-            _logs.add(log);
-          });
-          _loadUserStreak(); // update streak on new log!
-        },
-        onUpdated: (updatedLog) {
-          setState(() {
-            _logs = _logs.map((l) => l.id == updatedLog.id ? updatedLog : l).toList();
-          });
-        },
-        onDeleted: (deletedLog) {
-          setState(() {
-            _logs.removeWhere((l) => l.id == deletedLog.id);
-          });
-          _loadUserStreak(); // update streak on delete
-        },
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -290,7 +306,6 @@ class _HomePageState extends State<HomePage> {
                           ],
                         ),
                       ),
-                      // Streak badge
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                         decoration: BoxDecoration(
@@ -320,8 +335,6 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  // ... rest of your UI below ...
-                  // (unchanged from your last code block)
                   Card(
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.0)),
                     elevation: 4,
@@ -390,7 +403,6 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
-                  // ... (rest of the UI remains unchanged)
                   const SizedBox(height: 18),
                   Card(
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -618,18 +630,6 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: theme.colorScheme.surface,
-        selectedItemColor: theme.colorScheme.primary,
-        unselectedItemColor: theme.colorScheme.outline,
-        currentIndex: _currentIndex,
-        onTap: _onTabTapped,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profile'),
-          BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Register'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: 'Settings'),
-        ],
-      ),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:another_flushbar/flushbar.dart'; // For notifications
 import 'constants.dart';
 import 'emotion.dart';
 import 'SugarLog.dart';
@@ -74,13 +75,34 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
         "wasCraving": wasCraving
       };
 
+  Future<void> _showFlushBar({
+    required String message,
+    required Color color,
+    IconData? icon,
+    Duration duration = const Duration(seconds: 2),
+  }) async {
+    await Flushbar<void>(
+      message: message,
+      duration: duration,
+      backgroundColor: color,
+      flushbarPosition: FlushbarPosition.TOP,
+      margin: const EdgeInsets.all(8),
+      borderRadius: BorderRadius.circular(8),
+      icon: icon != null
+          ? Icon(icon, color: Colors.white)
+          : null,
+    ).show(context);
+  }
+
   Future<void> _createLog() async {
     setState(() => _loading = true);
     try {
       final token = await _getToken();
       if (token == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Not logged in. Please login again.')),
+        await _showFlushBar(
+          message: 'Not logged in. Please login again.',
+          color: Colors.red,
+          icon: Icons.error,
         );
         setState(() => _loading = false);
         return;
@@ -100,16 +122,23 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
         final log = SugarLog.fromJson(jsonDecode(response.body));
         widget.onCreated(log);
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sugar log added!')));
+        await _showFlushBar(
+          message: 'Sugar log added!',
+          color: Colors.green,
+          icon: Icons.check_circle,
+        );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to add log: ${response.body}')),
+        await _showFlushBar(
+          message: 'Failed to add log: ${response.body}',
+          color: Colors.red,
+          icon: Icons.error,
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+      await _showFlushBar(
+        message: 'Network error: $e',
+        color: Colors.red,
+        icon: Icons.error,
       );
     } finally {
       setState(() => _loading = false);
@@ -122,8 +151,10 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
     try {
       final token = await _getToken();
       if (token == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Not logged in. Please login again.')),
+        await _showFlushBar(
+          message: 'Not logged in. Please login again.',
+          color: Colors.red,
+          icon: Icons.error,
         );
         setState(() => _loading = false);
         return;
@@ -141,16 +172,23 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
         final log = SugarLog.fromJson(jsonDecode(response.body));
         widget.onUpdated?.call(log);
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sugar log updated!')));
+        await _showFlushBar(
+          message: 'Sugar log updated!',
+          color: Colors.green,
+          icon: Icons.check_circle,
+        );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update log: ${response.body}')),
+        await _showFlushBar(
+          message: 'Failed to update log: ${response.body}',
+          color: Colors.red,
+          icon: Icons.error,
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+      await _showFlushBar(
+        message: 'Network error: $e',
+        color: Colors.red,
+        icon: Icons.error,
       );
     } finally {
       setState(() => _loading = false);
@@ -163,8 +201,10 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
     try {
       final token = await _getToken();
       if (token == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Not logged in. Please login again.')),
+        await _showFlushBar(
+          message: 'Not logged in. Please login again.',
+          color: Colors.red,
+          icon: Icons.error,
         );
         setState(() => _loading = false);
         return;
@@ -179,16 +219,23 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
       if (response.statusCode == 204) {
         widget.onDeleted?.call(widget.existingLog!);
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sugar log deleted!')));
+        await _showFlushBar(
+          message: 'Sugar log deleted!',
+          color: Colors.green,
+          icon: Icons.delete,
+        );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete log: ${response.body}')),
+        await _showFlushBar(
+          message: 'Failed to delete log: ${response.body}',
+          color: Colors.red,
+          icon: Icons.error,
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+      await _showFlushBar(
+        message: 'Network error: $e',
+        color: Colors.red,
+        icon: Icons.error,
       );
     } finally {
       setState(() => _loading = false);
@@ -268,7 +315,6 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                           ),
                         ],
                       ),
-
                     Row(
                       children: [
                         Expanded(

@@ -1,60 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:gust_fe/Register.dart';
-import 'package:gust_fe/forgot_password.dart';
-import 'package:gust_fe/home_page.dart';
-import 'package:gust_fe/analytics_page.dart';
-import 'package:gust_fe/Login.dart';
-import 'package:gust_fe/SugarLog.dart';
-import 'package:gust_fe/sugar_log_creation_dialog.dart'; // <-- You need this for the register dialog
+import 'home_page.dart';      // Make sure this points to your dashboard/home
+import 'analytics_page.dart'; // Your analytics page
+import 'SugarLog.dart';      // Your SugarLog model
+import 'sugar_log_creation_dialog.dart'; // For the register dialog
 
-void main() {
-  runApp(const MyApp());
-}
-
-class AppRoutes {
-  static const String login = '/';
-  static const String register = '/register';
-  static const String forgotPassword = '/forgot-password';
-  static const String mainNav = '/main-nav'; // <-- Main shell after login
-}
-
-// Mock logs for testing
-final List<SugarLog> mockLogs = [
-  // Add your mock logs or fetch from backend if needed
-];
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'GUST App',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      initialRoute: AppRoutes.login,
-      routes: {
-        AppRoutes.login: (context) => const LoginPage(),
-        AppRoutes.register: (context) => const RegisterPage(),
-        AppRoutes.forgotPassword: (context) => const ForgotPasswordPage(),
-        AppRoutes.mainNav: (context) => MainNavigation(),
-      },
-    );
-  }
-}
-
-/// Navigation Shell for Home/Analytics with center FAB for Register
 class MainNavigation extends StatefulWidget {
+  const MainNavigation({super.key, required this.logs});
+  final List<SugarLog> logs;
+
   @override
   State<MainNavigation> createState() => _MainNavigationState();
 }
 
 class _MainNavigationState extends State<MainNavigation> {
-  int _currentIndex = 0;
-  List<SugarLog> _logs = mockLogs; // If you want to update logs
+  int _currentIndex = 0; // 0 = Home, 1 = Analytics
+
+  // Optionally, you can store logs in this widget and pass to children if needed
+  late List<SugarLog> _logs;
+
+  @override
+  void initState() {
+    super.initState();
+    _logs = widget.logs;
+  }
 
   void _showRegisterModal() {
     showDialog(
@@ -64,7 +32,7 @@ class _MainNavigationState extends State<MainNavigation> {
           setState(() {
             _logs.add(log);
           });
-          // Optionally refresh home/analytics if needed
+          // Optionally: you may want to update Home/Analytics with new data
         },
       ),
     );
@@ -72,16 +40,10 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      HomePage(logs: _logs),
-      AnalyticsPage(logs: _logs),
-    ];
-
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: pages,
-      ),
+      body: _currentIndex == 0
+          ? HomePage(logs: _logs)
+          : AnalyticsPage(logs: _logs),
       floatingActionButton: FloatingActionButton(
         onPressed: _showRegisterModal,
         child: const Icon(Icons.add),
@@ -104,7 +66,7 @@ class _MainNavigationState extends State<MainNavigation> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.dashboard,
+                    Icons.home,
                     color: _currentIndex == 0
                         ? Theme.of(context).colorScheme.primary
                         : Colors.grey,
