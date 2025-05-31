@@ -23,11 +23,13 @@ class _HomePageState extends State<HomePage> {
   bool _loading = false;
   String? _fullName;
   int _dailyGoal = 75;
+  int _streak = 0;
 
   @override
   void initState() {
     super.initState();
     _loadUserProfile();
+    _loadUserStreak();
     _fetchLogs();
   }
 
@@ -50,6 +52,26 @@ class _HomePageState extends State<HomePage> {
         setState(() {
           _fullName = data['fullName'] ?? "User";
           _dailyGoal = data['dailySugarGoal'] ?? 75;
+        });
+      }
+    } catch (e) {
+      // Handle error if needed
+    }
+  }
+
+  Future<void> _loadUserStreak() async {
+    final token = await _getToken();
+    if (token == null) return;
+    try {
+      final url = Uri.parse('$baseUrl/api/users/me/streak');
+      final response = await http.get(url, headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      });
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _streak = data['days'] ?? 0; // <-- FIXED: was 'streak'
         });
       }
     } catch (e) {
@@ -180,6 +202,7 @@ class _HomePageState extends State<HomePage> {
           setState(() {
             _logs.add(log);
           });
+          _loadUserStreak(); // update streak on new log!
         },
         onUpdated: (updatedLog) {
           setState(() {
@@ -190,6 +213,7 @@ class _HomePageState extends State<HomePage> {
           setState(() {
             _logs.removeWhere((l) => l.id == deletedLog.id);
           });
+          _loadUserStreak(); // update streak on delete
         },
       ),
     );
@@ -231,7 +255,11 @@ class _HomePageState extends State<HomePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _fetchLogs,
+            onPressed: () {
+              _fetchLogs();
+              _loadUserStreak();
+              _loadUserProfile();
+            },
             tooltip: "Reload logs",
           )
         ],
@@ -250,19 +278,50 @@ class _HomePageState extends State<HomePage> {
                         child: Icon(Icons.person, color: theme.colorScheme.primary),
                       ),
                       const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Welcome back,', style: theme.textTheme.bodySmall),
-                          Text(
-                            _fullName ?? 'GUST User',
-                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      )
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Welcome back,', style: theme.textTheme.bodySmall),
+                            Text(
+                              _fullName ?? 'GUST User',
+                              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Streak badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withOpacity(0.13),
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.local_fire_department, color: Colors.deepOrange, size: 20),
+                            const SizedBox(width: 6),
+                            Text(
+                              '$_streak',
+                              style: TextStyle(
+                                color: Colors.deepOrange,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              "day${_streak == 1 ? '' : 's'}",
+                              style: TextStyle(fontSize: 13, color: Colors.grey[800]),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
+                  // ... rest of your UI below ...
+                  // (unchanged from your last code block)
                   Card(
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.0)),
                     elevation: 4,
@@ -331,6 +390,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
+                  // ... (rest of the UI remains unchanged)
                   const SizedBox(height: 18),
                   Card(
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
