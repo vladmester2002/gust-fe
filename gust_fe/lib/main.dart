@@ -5,22 +5,23 @@ import 'package:gust_fe/home_page.dart';
 import 'package:gust_fe/analytics_page.dart';
 import 'package:gust_fe/Login.dart';
 import 'package:gust_fe/SugarLog.dart';
-import 'package:gust_fe/sugar_log_creation_dialog.dart'; // <-- You need this for the register dialog
+import 'package:gust_fe/sugar_log_creation_dialog.dart';
+import 'package:gust_fe/main_navigation.dart'; // <-- use the new main_navigation.dart!
 
 void main() {
   runApp(const MyApp());
 }
 
 class AppRoutes {
-  static const String login = '/';
+  static const String login = '/';              // Login page is root "/"
   static const String register = '/register';
   static const String forgotPassword = '/forgot-password';
-  static const String mainNav = '/main-nav'; // <-- Main shell after login
+  static const String mainNav = '/main-nav';
 }
 
-// Mock logs for testing
+// Mock logs for demo/testing (replace with your backend fetching logic)
 final List<SugarLog> mockLogs = [
-  // Add your mock logs or fetch from backend if needed
+  // SugarLog(...), // Add example logs here if needed
 ];
 
 class MyApp extends StatelessWidget {
@@ -35,119 +36,13 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      initialRoute: AppRoutes.login,
+      initialRoute: AppRoutes.login,        // This is "/"
       routes: {
-        AppRoutes.login: (context) => const LoginPage(),
-        AppRoutes.register: (context) => const RegisterPage(),
-        AppRoutes.forgotPassword: (context) => const ForgotPasswordPage(),
-        AppRoutes.mainNav: (context) => MainNavigation(),
+        AppRoutes.login: (context) => const LoginPage(),              // "/" route: LoginPage
+        AppRoutes.register: (context) => const RegisterPage(),        // "/register"
+        AppRoutes.forgotPassword: (context) => const ForgotPasswordPage(), // "/forgot-password"
+        AppRoutes.mainNav: (context) => MainNavigation(logs: mockLogs),    // "/main-nav"
       },
-    );
-  }
-}
-
-/// Navigation Shell for Home/Analytics with center FAB for Register
-class MainNavigation extends StatefulWidget {
-  @override
-  State<MainNavigation> createState() => _MainNavigationState();
-}
-
-class _MainNavigationState extends State<MainNavigation> {
-  int _currentIndex = 0;
-  List<SugarLog> _logs = mockLogs; // If you want to update logs
-
-  void _showRegisterModal() {
-    showDialog(
-      context: context,
-      builder: (context) => SugarLogCreationDialog(
-        onCreated: (log) {
-          setState(() {
-            _logs.add(log);
-          });
-          // Optionally refresh home/analytics if needed
-        },
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final pages = [
-      HomePage(logs: _logs),
-      AnalyticsPage(logs: _logs),
-    ];
-
-    return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: pages,
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showRegisterModal,
-        child: const Icon(Icons.add),
-        tooltip: "Register Sugar Intake",
-        shape: const CircleBorder(),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            MaterialButton(
-              minWidth: 40,
-              onPressed: () {
-                setState(() => _currentIndex = 0);
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.dashboard,
-                    color: _currentIndex == 0
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey,
-                  ),
-                  Text(
-                    'Home',
-                    style: TextStyle(
-                      color: _currentIndex == 0
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            MaterialButton(
-              minWidth: 40,
-              onPressed: () {
-                setState(() => _currentIndex = 1);
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.bar_chart,
-                    color: _currentIndex == 1
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey,
-                  ),
-                  Text(
-                    'Analytics',
-                    style: TextStyle(
-                      color: _currentIndex == 1
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
