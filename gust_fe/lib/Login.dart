@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'constants.dart'; // <-- Make sure you have this with baseUrl
-import 'package:shared_preferences/shared_preferences.dart'; // <-- NEW
-import 'package:another_flushbar/flushbar.dart'; // At the top
+import 'constants.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:another_flushbar/flushbar.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -31,52 +31,51 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-  final response = await http.post(url, headers: headers, body: body);
-  setState(() => _isLoading = false);
-  if (response.statusCode == 200) {
-    final data = jsonDecode(response.body);
-    final token = data['token'];
+      final response = await http.post(url, headers: headers, body: body);
+      setState(() => _isLoading = false);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final token = data['token'];
 
-    // Save token securely for further API use
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('jwt_token', token);
+        // Save token securely for further API use
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('jwt_token', token);
 
-    Flushbar(
-      message: 'Login successful!',
-      duration: const Duration(seconds: 2),
-      backgroundColor: Colors.green,
-      flushbarPosition: FlushbarPosition.TOP,
-      margin: const EdgeInsets.all(8),
-      borderRadius: BorderRadius.circular(8),
-      icon: const Icon(Icons.check_circle, color: Colors.white),
-    ).show(context);
+        Flushbar(
+          message: 'Login successful!',
+          duration: const Duration(seconds: 2),
+          backgroundColor: Colors.green,
+          flushbarPosition: FlushbarPosition.TOP,
+          margin: const EdgeInsets.all(8),
+          borderRadius: BorderRadius.circular(8),
+          icon: const Icon(Icons.check_circle, color: Colors.white),
+        ).show(context);
 
-    Navigator.pushReplacementNamed(context, '/main-nav');
-  } else {
-    final message = _parseErrorMessage(response.body) ?? 'Login failed';
-    Flushbar(
-      message: 'Error: $message',
-      duration: const Duration(seconds: 2),
-      backgroundColor: Colors.red,
-      flushbarPosition: FlushbarPosition.TOP,
-      margin: const EdgeInsets.all(8),
-      borderRadius: BorderRadius.circular(8),
-      icon: const Icon(Icons.error, color: Colors.white),
-    ).show(context);
-  }
-} catch (e) {
-  setState(() => _isLoading = false);
-  Flushbar(
-    message: 'Network error: $e',
-    duration: const Duration(seconds: 2),
-    backgroundColor: Colors.red,
-    flushbarPosition: FlushbarPosition.TOP,
-    margin: const EdgeInsets.all(8),
-    borderRadius: BorderRadius.circular(8),
-    icon: const Icon(Icons.error, color: Colors.white),
-  ).show(context);
-}
-
+        Navigator.pushReplacementNamed(context, '/main-nav');
+      } else {
+        final message = _parseErrorMessage(response.body) ?? 'Login failed';
+        Flushbar(
+          message: 'Error: $message',
+          duration: const Duration(seconds: 2),
+          backgroundColor: Colors.red,
+          flushbarPosition: FlushbarPosition.TOP,
+          margin: const EdgeInsets.all(8),
+          borderRadius: BorderRadius.circular(8),
+          icon: const Icon(Icons.error, color: Colors.white),
+        ).show(context);
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      Flushbar(
+        message: 'Network error: $e',
+        duration: const Duration(seconds: 2),
+        backgroundColor: Colors.red,
+        flushbarPosition: FlushbarPosition.TOP,
+        margin: const EdgeInsets.all(8),
+        borderRadius: BorderRadius.circular(8),
+        icon: const Icon(Icons.error, color: Colors.white),
+      ).show(context);
+    }
   }
 
   String? _parseErrorMessage(String responseBody) {
@@ -90,9 +89,6 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _register() => Navigator.pushNamed(context, '/register');
-  void _forgotPassword() => Navigator.pushNamed(context, '/forgot-password');
-  void _testUser() => Navigator.pushNamed(context, '/test-page');
-  void _testStats() => Navigator.pushNamed(context, '/test-stats');
 
   @override
   Widget build(BuildContext context) {
@@ -175,18 +171,6 @@ class _LoginPageState extends State<LoginPage> {
                       TextButton(
                         onPressed: _register,
                         child: Text('Create Account', style: TextStyle(color: theme.colorScheme.secondary)),
-                      ),
-                      TextButton(
-                        onPressed: _forgotPassword,
-                        child: Text('Forgot Password?', style: TextStyle(color: theme.colorScheme.outline)),
-                      ),
-                      TextButton(
-                        onPressed: _testUser,
-                        child: Text('TEST USER', style: TextStyle(color: theme.colorScheme.outline)),
-                      ),
-                      TextButton(
-                        onPressed: _testStats,
-                        child: Text('TEST STATS', style: TextStyle(color: theme.colorScheme.outline)),
                       ),
                     ],
                   ),

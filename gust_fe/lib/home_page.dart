@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math'; // <--- NEW for max()
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:http/http.dart' as http;
@@ -28,7 +29,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _logs = List.from(widget.logs); // So you see something before first fetch
+    _logs = List.from(widget.logs);
     _loadUserProfile();
     _loadUserStreak();
     _fetchLogs();
@@ -72,9 +73,7 @@ class _HomePageState extends State<HomePage> {
           _dailyGoal = data['dailySugarGoal'] ?? 75;
         });
       }
-    } catch (e) {
-      // Optionally: show error here with Flushbar
-    }
+    } catch (e) {}
   }
 
   Future<void> _loadUserStreak() async {
@@ -92,9 +91,7 @@ class _HomePageState extends State<HomePage> {
           _streak = data['days'] ?? 0;
         });
       }
-    } catch (e) {
-      // Optionally: show error here with Flushbar
-    }
+    } catch (e) {}
   }
 
   Future<void> _updateDailyGoalDialog() async {
@@ -204,36 +201,35 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showRegisterModal({SugarLog? editLog}) async {
-  await showDialog(
-    context: context,
-    builder: (context) => SugarLogCreationDialog(
-      existingLog: editLog,
-      onCreated: (log) async {
-        setState(() {
-          _logs.add(log);
-        });
-        _loadUserStreak();
-        await _fetchLogs(); // <--- This line fetches latest logs after creation!
-      },
-      onUpdated: (log) {
-        setState(() {
-          final idx = _logs.indexWhere((l) => l.id == log.id);
-          if (idx != -1) _logs[idx] = log;
-        });
-        _loadUserStreak();
-      },
-      onDeleted: (log) {
-        setState(() {
-          _logs.removeWhere((l) => l.id == log.id);
-        });
-        _loadUserStreak();
-      },
-    ),
-  );
-  _loadUserStreak();
-        await _fetchLogs(); 
-}
-
+    await showDialog(
+      context: context,
+      builder: (context) => SugarLogCreationDialog(
+        existingLog: editLog,
+        onCreated: (log) async {
+          setState(() {
+            _logs.add(log);
+          });
+          _loadUserStreak();
+          await _fetchLogs();
+        },
+        onUpdated: (log) {
+          setState(() {
+            final idx = _logs.indexWhere((l) => l.id == log.id);
+            if (idx != -1) _logs[idx] = log;
+          });
+          _loadUserStreak();
+        },
+        onDeleted: (log) {
+          setState(() {
+            _logs.removeWhere((l) => l.id == log.id);
+          });
+          _loadUserStreak();
+        },
+      ),
+    );
+    _loadUserStreak();
+    await _fetchLogs();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -259,6 +255,15 @@ class _HomePageState extends State<HomePage> {
       }
     }
     final dataPoints = dailyTotals.entries.toList();
+
+    // --- Fix maxY to be a round, clean number (like 10, 20, 30, 40)
+    double maxValue = dataPoints.map((e) => e.value).isNotEmpty
+        ? dataPoints.map((e) => e.value).reduce(max).toDouble()
+        : 10;
+    double maxY = maxValue <= 10
+        ? 10
+        : ((maxValue + 9) ~/ 10) * 10;
+    // if all zeros, show at least 10
 
     final dailyGoal = _dailyGoal;
     final remaining = (dailyGoal - todaySugar).clamp(0, dailyGoal);
@@ -423,7 +428,7 @@ class _HomePageState extends State<HomePage> {
                             child: LineChart(
                               LineChartData(
                                 minY: 0,
-                                maxY: (dataPoints.map((e) => e.value).reduce((a, b) => a > b ? a : b) + 10).toDouble(),
+                                maxY: maxY.toDouble(),
                                 gridData: FlGridData(
                                   show: true,
                                   drawVerticalLine: false,
@@ -448,9 +453,14 @@ class _HomePageState extends State<HomePage> {
                                   leftTitles: AxisTitles(
                                     sideTitles: SideTitles(
                                       showTitles: true,
-                                      reservedSize: 32,
-                                      getTitlesWidget: (value, _) =>
-                                          Text('${value.toInt()}g', style: const TextStyle(fontSize: 11)),
+                                      reservedSize: 36, // a bit more space
+                                      getTitlesWidget: (value, meta) {
+                                        // only show integer ticks (0, 10, 20, 30, 40, ...)
+                                        if (value % 10 == 0) {
+                                          return Text('${value.toInt()}g', style: const TextStyle(fontSize: 13));
+                                        }
+                                        return const SizedBox();
+                                      },
                                     ),
                                   ),
                                   rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -484,6 +494,45 @@ class _HomePageState extends State<HomePage> {
                                     ),
                                   ),
                                 ],
+                                // --------------- TOOLTIP SECTION ---------------
+                                lineTouchData: LineTouchData(
+                                  enabled: true,
+                                  handleBuiltInTouches: true,
+                                  touchTooltipData: LineTouchTooltipData(
+                                    tooltipBgColor: Colors.white,
+                                    tooltipRoundedRadius: 10,
+                                    tooltipPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    tooltipBorder: BorderSide(color: Colors.deepPurple.shade100, width: 1.5),
+                                    getTooltipItems: (touchedSpots) {
+                                      return touchedSpots.map((touchedSpot) {
+                                        final idx = touchedSpot.spotIndex;
+                                        final dayName = DateFormat('EEEE').format(dataPoints[idx].key);
+                                        final value = dataPoints[idx].value;
+                                        return LineTooltipItem(
+                                          "$dayName\n",
+                                          const TextStyle(
+                                            color: Colors.deepPurple,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                            height: 1.3,
+                                          ),
+                                          children: [
+                                            TextSpan(
+                                              text: "$value g",
+                                              style: const TextStyle(
+                                                color: Colors.black87,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 15,
+                                                height: 1.6,
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      }).toList();
+                                    },
+                                  ),
+                                ),
+                                // --------------- END TOOLTIP SECTION ---------------
                               ),
                             ),
                           ),

@@ -44,12 +44,13 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
   void initState() {
     super.initState();
     final log = widget.existingLog;
+    // Always set selectedDate to today for both create & edit
+    selectedDate = DateTime.now();
     sugarController = TextEditingController(text: log?.sugarGrams.toString() ?? '');
     productNameController = TextEditingController(text: log?.productName ?? '');
     sugarTypeController = TextEditingController(text: log?.sugarType ?? '');
     contextNoteController = TextEditingController(text: log?.contextNote ?? '');
     locationController = TextEditingController(text: log?.location ?? '');
-    selectedDate = log?.date ?? DateTime.now();
     selectedTime = log != null
         ? TimeOfDay(hour: log.hour, minute: log.minute)
         : TimeOfDay.now();
@@ -107,8 +108,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
         setState(() => _loading = false);
         return;
       }
-      // Always use today's date when creating a new log
-      selectedDate = DateTime.now();
+      // Don't override selectedDate, it is always today
       final url = Uri.parse('$baseUrl/api/sugarlogs');
       final response = await http.post(
         url,
@@ -281,40 +281,18 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                       decoration: const InputDecoration(labelText: "Location"),
                     ),
                     const SizedBox(height: 12),
-                    // Date row: Show picker only when editing
-                    if (widget.existingLog != null)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text("Date: ${DateFormat.yMd().format(selectedDate)}"),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            "Date: ${DateFormat.yMd().format(selectedDate)} (today only)",
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          IconButton(
-                            icon: Icon(Icons.calendar_today, color: theme.colorScheme.primary),
-                            onPressed: () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: selectedDate,
-                                firstDate: DateTime(2020),
-                                lastDate: DateTime(2100),
-                              );
-                              if (picked != null) {
-                                setState(() => selectedDate = picked);
-                              }
-                            },
-                          ),
-                        ],
-                      )
-                    else
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              "Date: ${DateFormat.yMd().format(DateTime.now())}",
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                        // No calendar picker: can't change date
+                        const Icon(Icons.today, color: Colors.grey, size: 20)
+                      ],
+                    ),
                     Row(
                       children: [
                         Expanded(
@@ -333,6 +311,11 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                           },
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      "Tip: Pick the time you actually consumed sugar for accurate analytics.",
+                      style: TextStyle(color: Colors.deepPurple[300], fontSize: 12),
                     ),
                     DropdownButtonFormField<Emotion>(
                       value: selectedEmotion,
@@ -377,7 +360,6 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
               : () async {
                   if (!_formKey.currentState!.validate()) return;
                   if (widget.existingLog == null) {
-                    // For create, always use current date (set just before call)
                     await _createLog();
                   } else {
                     await _updateLog();

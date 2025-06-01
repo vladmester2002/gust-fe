@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'constants.dart';
+import 'package:another_flushbar/flushbar.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -17,6 +18,23 @@ class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+
+  Future<void> _showFlushBar({
+    required String message,
+    required Color color,
+    IconData? icon,
+    Duration duration = const Duration(seconds: 2),
+  }) async {
+    await Flushbar<void>(
+      message: message,
+      duration: duration,
+      backgroundColor: color,
+      flushbarPosition: FlushbarPosition.TOP,
+      margin: const EdgeInsets.all(8),
+      borderRadius: BorderRadius.circular(8),
+      icon: icon != null ? Icon(icon, color: Colors.white) : null,
+    ).show(context);
+  }
 
   Future<void> _register() async {
     if (_formKey.currentState?.validate() ?? false) {
@@ -34,30 +52,39 @@ class _RegisterPageState extends State<RegisterPage> {
         setState(() => _isLoading = false);
 
         if (response.statusCode == 200) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Registration successful!')),
+          await _showFlushBar(
+            message: 'Registration successful!',
+            color: Colors.green,
+            icon: Icons.check_circle,
           );
-          Navigator.of(context).pop(); // Optionally navigate to login
+          Navigator.of(context).pop();
         } else if (response.statusCode == 400) {
-          // Show server-side validation message if present
           final message = _parseErrorMessage(response.body) ?? 'Bad request. Please check your input.';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $message')),
+          await _showFlushBar(
+            message: 'Error: $message',
+            color: Colors.red,
+            icon: Icons.error,
           );
         } else if (response.statusCode == 409) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Account already exists.')),
+          await _showFlushBar(
+            message: 'Account already exists.',
+            color: Colors.orange,
+            icon: Icons.warning,
           );
         } else {
           final message = _parseErrorMessage(response.body) ?? 'Unexpected error (${response.statusCode}).';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $message')),
+          await _showFlushBar(
+            message: 'Error: $message',
+            color: Colors.red,
+            icon: Icons.error,
           );
         }
       } catch (e) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Network error: $e')),
+        await _showFlushBar(
+          message: 'Network error: $e',
+          color: Colors.red,
+          icon: Icons.error,
         );
       }
     }

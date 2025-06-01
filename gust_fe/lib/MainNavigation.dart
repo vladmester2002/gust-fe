@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'home_page.dart';      // Make sure this points to your dashboard/home
+import 'home_page.dart';      // Your dashboard/home
 import 'analytics_page.dart'; // Your analytics page
 import 'SugarLog.dart';      // Your SugarLog model
 import 'sugar_log_creation_dialog.dart'; // For the register dialog
@@ -14,9 +14,10 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0; // 0 = Home, 1 = Analytics
-
-  // Optionally, you can store logs in this widget and pass to children if needed
   late List<SugarLog> _logs;
+
+  // This key will force AnalyticsPage to rebuild every time it's changed
+  Key _analyticsKey = UniqueKey();
 
   @override
   void initState() {
@@ -31,11 +32,22 @@ class _MainNavigationState extends State<MainNavigation> {
         onCreated: (log) {
           setState(() {
             _logs.add(log);
+            // If user adds a log, also refresh Analytics next time it's opened:
+            _analyticsKey = UniqueKey();
           });
-          // Optionally: you may want to update Home/Analytics with new data
         },
       ),
     );
+  }
+
+  void _onNavTap(int index) {
+    setState(() {
+      if (index == 1) {
+        // Always generate a new key for Analytics so it refreshes every time
+        _analyticsKey = UniqueKey();
+      }
+      _currentIndex = index;
+    });
   }
 
   @override
@@ -43,7 +55,7 @@ class _MainNavigationState extends State<MainNavigation> {
     return Scaffold(
       body: _currentIndex == 0
           ? HomePage(logs: _logs)
-          : AnalyticsPage(logs: _logs),
+          : AnalyticsPage(key: _analyticsKey, logs: _logs),
       floatingActionButton: FloatingActionButton(
         onPressed: _showRegisterModal,
         child: const Icon(Icons.add),
@@ -59,9 +71,7 @@ class _MainNavigationState extends State<MainNavigation> {
           children: [
             MaterialButton(
               minWidth: 40,
-              onPressed: () {
-                setState(() => _currentIndex = 0);
-              },
+              onPressed: () => _onNavTap(0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -84,9 +94,7 @@ class _MainNavigationState extends State<MainNavigation> {
             ),
             MaterialButton(
               minWidth: 40,
-              onPressed: () {
-                setState(() => _currentIndex = 1);
-              },
+              onPressed: () => _onNavTap(1),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
