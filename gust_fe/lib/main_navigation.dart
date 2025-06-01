@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'analytics_page.dart';
 import 'profile_page.dart';
+import 'community_page.dart'; // <-- NEW!
 import 'SugarLog.dart';
 import 'sugar_log_creation_dialog.dart';
 
@@ -44,10 +45,11 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    // 3 pages: Home, Analytics, Profile
+    // 4 pages: Home, Analytics, Community, Profile
     final pages = [
       HomePage(logs: _logs),
       AnalyticsPage(logs: _logs),
+      CommunityPage(), // <-- Add Community Page
       ProfilePage(),
     ];
 
@@ -114,22 +116,44 @@ class _MainNavigationState extends State<MainNavigation> {
               ),
             ),
             // Spacer for FAB
-            SizedBox(width: 48),
-            // Profile
+            const SizedBox(width: 48),
+            // Community
             MaterialButton(
               minWidth: 40,
               onPressed: () => _onNavTap(2),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.person,
+                  Icon(Icons.emoji_events,
                       color: _currentIndex == 2
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.grey),
+                  Text(
+                    'Community',
+                    style: TextStyle(
+                      color: _currentIndex == 2
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Profile
+            MaterialButton(
+              minWidth: 40,
+              onPressed: () => _onNavTap(3),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.person,
+                      color: _currentIndex == 3
                           ? Theme.of(context).colorScheme.primary
                           : Colors.grey),
                   Text(
                     'Profile',
                     style: TextStyle(
-                      color: _currentIndex == 2
+                      color: _currentIndex == 3
                           ? Theme.of(context).colorScheme.primary
                           : Colors.grey,
                     ),
