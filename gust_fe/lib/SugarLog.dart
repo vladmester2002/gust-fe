@@ -44,4 +44,24 @@ class SugarLog {
       wasCraving: json['wasCraving'] as bool,
     );
   }
+
+  // Suggestion 10.1: Add toJson() method for easier serialization.
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'sugarGrams': sugarGrams,
+      'date': date.toIso8601String(),
+      'hour': hour,
+      'minute': minute,
+      'productName': productName,
+      'sugarType': sugarType,
+      'contextNote': contextNote,
+      'emotion': emotion.name, // Store as string
+      'location': location,
+      'wasCraving': wasCraving,
+    };
+  }
 }
+
+// Suggestion 10.2: For more advanced serialization, consider using the `freezed` or `json_serializable` package.
+// See: https://pub.dev/packages/freezed or https://pub.dev/packages/json_serializable

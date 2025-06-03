@@ -34,7 +34,7 @@ class SugarStatsPage extends StatelessWidget {
     final isLess = today < yesterday;
     final weeklyTotal = dataPoints.fold<int>(0, (sum, e) => sum + e.value);
 
-    final weeklyGoal = 210; // e.g., 30g/day * 7 days
+    const weeklyGoal = 210; // e.g., 30g/day * 7 days
     final percentOfGoal = (weeklyTotal / weeklyGoal).clamp(0.0, 1.0);
 
     // For responsiveness
@@ -63,7 +63,7 @@ class SugarStatsPage extends StatelessWidget {
                         height: chartHeight,
                         width: chartWidth,
                         child: dataPoints.isEmpty
-                            ? Center(child: Text("No data to show.", style: TextStyle(color: Colors.grey)))
+                            ? const Center(child: Text("No data to show.", style: TextStyle(color: Colors.grey)))
                             : LineChart(
                                 LineChartData(
                                   gridData: FlGridData(
@@ -107,8 +107,8 @@ class SugarStatsPage extends StatelessWidget {
                                         ),
                                       ),
                                     ),
-                                    rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                    topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                                   ),
                                   borderData: FlBorderData(
                                     show: true,
@@ -118,7 +118,7 @@ class SugarStatsPage extends StatelessWidget {
                                   ),
                                   minY: 0,
                                   maxY: (dailyTotals.values.reduce((a, b) => a > b ? a : b) + 10).toDouble(),
-                                  clipData: FlClipData.all(),
+                                  clipData: const FlClipData.all(),
                                   lineBarsData: [
                                     LineChartBarData(
                                       spots: [

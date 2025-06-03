@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:fl_chart/fl_chart.dart';
@@ -15,7 +14,6 @@ import 'dart:io' as io;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart'; // DOnly for mobile/desktop
 import 'package:open_file/open_file.dart'; // Only for mobile/desktop
-import 'package:flutter/services.dart' show rootBundle;
 
 import 'web_csv_download_stub.dart'
     if (dart.library.html) 'web_csv_download.dart';
@@ -330,7 +328,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
   // --- Time of Day tab - always today only, no selectors
   if (_tabController.index == 2) {
     final slotData = _fillTimeSlots(_data);
-    return _buildAnalyticsCard(
+    return AnalyticsCard(
       title: "Time of Day Patterns",
       description: "Sugar intake for each time slot today (${DateFormat('yMMMEd').format(_currentDay)}).",
       stats: _getTimeOfDayStats(slotData),
@@ -342,7 +340,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
 
   switch (_tabController.index) {
     case 0:
-      return _buildAnalyticsCard(
+      return AnalyticsCard(
         title: "Daily Sugar Intake Trend",
         description:
             "Track how your sugar consumption fluctuates day-by-day in the selected month.",
@@ -350,9 +348,11 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
         onRefresh: _fetchTabData,
         chart: _buildLineChart(_data),
         showExportButton: true, // <--- SHOW button here!
+        downloading: _downloading,
+        onExport: _exportCsv,
       );
     case 1:
-      return _buildAnalyticsCard(
+      return AnalyticsCard(
         title: "Emotion Summary",
         description:
             "See which emotions appeared most frequently this month, and how they relate to your sugar intake.",
@@ -362,7 +362,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
         showExportButton: false, // <--- Hide
       );
     case 3:
-      return _buildAnalyticsCard(
+      return AnalyticsCard(
         title: "Monthly Total",
         description:
             "View your total sugar intake per month and look for long-term trends.",
@@ -375,86 +375,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
       return const SizedBox();
   }
 }
-
-  Widget _buildAnalyticsCard({
-    required String title,
-    required String description,
-    required Widget chart,
-    required List<Widget> stats,
-    required VoidCallback onRefresh,
-    bool showExportButton = false, // <--- add this param!
-  }) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      color: Colors.purple[50],
-      elevation: 6,
-      margin: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(title,
-                      style: TextStyle(
-                          fontSize: 20,
-                          color: Colors.deepPurple[800],
-                          fontWeight: FontWeight.w700)),
-                ),
-                if (showExportButton) // <-- only show when needed!
-                  Tooltip(
-                    message: "Export This Month as CSV",
-                    child: IconButton(
-                      icon: _downloading
-                          ? SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.3,
-                                color: Colors.deepPurple,
-                              ))
-                          : const Icon(Icons.download_rounded),
-                      color: Colors.deepPurple,
-                      splashRadius: 24,
-                      onPressed: _downloading ? null : _exportCsv,
-                    ),
-                  ),
-                Tooltip(
-                  message: "Refresh",
-                  child: IconButton(
-                    icon: const Icon(Icons.refresh),
-                    color: Colors.deepPurple,
-                    splashRadius: 24,
-                    onPressed: onRefresh,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 3),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(description,
-                  style: TextStyle(
-                      color: Colors.purple[700],
-                      fontSize: 13,
-                      fontStyle: FontStyle.italic)),
-            ),
-            if (stats.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 10, bottom: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: stats,
-                ),
-              ),
-            chart,
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildLineChart(List<AnalyticsResponse> data) {
     final sortedData = _sortDataByDate(data);
@@ -535,8 +455,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                   },
                 ),
               ),
-              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             ),
             borderData: FlBorderData(
               show: true,
@@ -745,8 +665,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                 },
               ),
             ),
-            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
           gridData: FlGridData(
             show: true,
@@ -1070,20 +990,20 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                   children: [
                     Column(
                       children: [
-                        Text("Min", style: TextStyle(fontSize: 13, color: Colors.purple)),
-                        Text("${minVal.toStringAsFixed(2)}", style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text("Min", style: TextStyle(fontSize: 13, color: Colors.purple)),
+                        Text(minVal.toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.bold)),
                       ],
                     ),
                     Column(
                       children: [
-                        Text("Avg", style: TextStyle(fontSize: 13, color: Colors.purple)),
-                        Text("${avgVal.toStringAsFixed(2)}", style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text("Avg", style: TextStyle(fontSize: 13, color: Colors.purple)),
+                        Text(avgVal.toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.bold)),
                       ],
                     ),
                     Column(
                       children: [
-                        Text("Max", style: TextStyle(fontSize: 13, color: Colors.purple)),
-                        Text("${maxVal.toStringAsFixed(2)}", style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text("Max", style: TextStyle(fontSize: 13, color: Colors.purple)),
+                        Text(maxVal.toStringAsFixed(2), style: const TextStyle(fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ],
@@ -1099,7 +1019,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
   }
 
   Widget _buildMonthSelector() {
-    final Color dropdownTextColor = Colors.deepPurple;
+    const Color dropdownTextColor = Colors.deepPurple;
     final Color dropdownBgColor = Colors.purple[50]!;
 
     return Padding(
@@ -1117,13 +1037,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
               value: selectedMonth,
               borderRadius: BorderRadius.circular(10),
               dropdownColor: dropdownBgColor,
-              style: TextStyle(color: dropdownTextColor, fontSize: 16),
+              style: const TextStyle(color: dropdownTextColor, fontSize: 16),
               items: List.generate(12, (i) {
                 return DropdownMenuItem(
                   value: i + 1,
                   child: Text(
                     DateFormat.MMMM().format(DateTime(2000, i + 1)),
-                    style: TextStyle(color: dropdownTextColor),
+                    style: const TextStyle(color: dropdownTextColor),
                   ),
                 );
               }),
@@ -1148,14 +1068,14 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
               value: selectedYear,
               borderRadius: BorderRadius.circular(10),
               dropdownColor: dropdownBgColor,
-              style: TextStyle(color: dropdownTextColor, fontSize: 16),
+              style: const TextStyle(color: dropdownTextColor, fontSize: 16),
               items: List.generate(5, (i) {
                 final year = DateTime.now().year - i;
                 return DropdownMenuItem(
                   value: year,
                   child: Text(
                     '$year',
-                    style: TextStyle(color: dropdownTextColor),
+                    style: const TextStyle(color: dropdownTextColor),
                   ),
                 );
               }),
@@ -1213,6 +1133,102 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class AnalyticsCard extends StatelessWidget {
+  final String title;
+  final String description;
+  final Widget chart;
+  final List<Widget> stats;
+  final VoidCallback onRefresh;
+  final bool showExportButton;
+  final bool downloading;
+  final VoidCallback? onExport;
+
+  const AnalyticsCard({
+    super.key,
+    required this.title,
+    required this.description,
+    required this.chart,
+    required this.stats,
+    required this.onRefresh,
+    this.showExportButton = false,
+    this.downloading = false,
+    this.onExport,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      color: Colors.purple[50],
+      elevation: 6,
+      margin: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(title,
+                      style: TextStyle(
+                          fontSize: 20,
+                          color: Colors.deepPurple[800],
+                          fontWeight: FontWeight.w700)),
+                ),
+                if (showExportButton)
+                  Tooltip(
+                    message: "Export This Month as CSV",
+                    child: IconButton(
+                      icon: downloading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.3,
+                                color: Colors.deepPurple,
+                              ))
+                          : const Icon(Icons.download_rounded),
+                      color: Colors.deepPurple,
+                      splashRadius: 24,
+                      onPressed: downloading ? null : onExport,
+                    ),
+                  ),
+                Tooltip(
+                  message: "Refresh",
+                  child: IconButton(
+                    icon: const Icon(Icons.refresh),
+                    color: Colors.deepPurple,
+                    splashRadius: 24,
+                    onPressed: onRefresh,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(description,
+                  style: TextStyle(
+                      color: Colors.purple[700],
+                      fontSize: 13,
+                      fontStyle: FontStyle.italic)),
+            ),
+            if (stats.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 10, bottom: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: stats,
+                ),
+              ),
+            chart,
+          ],
+        ),
       ),
     );
   }

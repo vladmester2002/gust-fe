@@ -17,6 +17,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
@@ -37,9 +38,10 @@ class _LoginPageState extends State<LoginPage> {
         final data = jsonDecode(response.body);
         final token = data['token'];
 
-        // Save token securely for further API use
+        // Save token and email securely for further API use
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('jwt_token', token);
+        await prefs.setString('user_email', _usernameController.text.trim());
 
         Flushbar(
           message: 'Login successful!',
@@ -141,18 +143,31 @@ class _LoginPageState extends State<LoginPage> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _passwordController,
-                        obscureText: true,
+                        obscureText: _obscurePassword,
                         decoration: InputDecoration(
                           labelText: 'Password',
                           prefixIcon: Icon(Icons.lock_outline, color: theme.colorScheme.primary),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0)),
                           contentPadding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 10.0),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                              color: theme.colorScheme.primary,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty) return 'Please enter your password';
                           if (value.length < 6) return 'Password must be at least 6 characters';
                           return null;
                         },
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _login(),
                       ),
                       const SizedBox(height: 24),
                       _isLoading

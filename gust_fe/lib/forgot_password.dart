@@ -30,7 +30,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         backgroundColor: theme.colorScheme.inversePrimary,
         title: const Text('Reset Password'),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () {
             Navigator.of(context).pop();
           },
@@ -76,14 +76,14 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                         controller: _emailController,
                         decoration: InputDecoration(
                           labelText: 'Email',
-                          labelStyle: TextStyle(fontSize: 14),
+                          labelStyle: const TextStyle(fontSize: 14),
                           prefixIcon: Icon(Icons.email_outlined, color: theme.colorScheme.primary, size: 20),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10.0),
                           ),
                           contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
                         ),
-                        style: TextStyle(fontSize: 14),
+                        style: const TextStyle(fontSize: 14),
                         keyboardType: TextInputType.emailAddress,
                         validator: (value) {
                           if (value == null || value.isEmpty) {

@@ -21,7 +21,7 @@ class UserRankingResponse {
 }
 
 class CommunityPage extends StatefulWidget {
-  const CommunityPage({Key? key}) : super(key: key);
+  const CommunityPage({super.key});
 
   @override
   State<CommunityPage> createState() => _CommunityPageState();
@@ -134,9 +134,9 @@ class _CommunityPageState extends State<CommunityPage> {
               _fetchRankings();
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(child: Text("Monthly"), value: "monthly"),
-              const PopupMenuItem(child: Text("Daily"), value: "daily"),
-              const PopupMenuItem(child: Text("Yearly"), value: "yearly"),
+              const PopupMenuItem(value: "monthly", child: Text("Monthly")),
+              const PopupMenuItem(value: "daily", child: Text("Daily")),
+              const PopupMenuItem(value: "yearly", child: Text("Yearly")),
             ],
           ),
         ],
@@ -144,11 +144,11 @@ class _CommunityPageState extends State<CommunityPage> {
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),
         child: loading
-            ? Center(
-                key: const ValueKey('loading'),
+            ? const Center(
+                key: ValueKey('loading'),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
+                  children: [
                     CircularProgressIndicator(),
                     SizedBox(height: 16),
                     Text('Loading rankings...', style: TextStyle(fontSize: 15)),
@@ -176,14 +176,14 @@ class _CommunityPageState extends State<CommunityPage> {
                     ),
                   )
                 : rankings.isEmpty
-                    ? Center(
-                        key: const ValueKey('empty'),
+                    ? const Center(
+                        key: ValueKey('empty'),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.emoji_events, size: 48, color: Colors.purple),
-                            const SizedBox(height: 10),
-                            const Text("No rankings found.",
+                            Icon(Icons.emoji_events, size: 48, color: Colors.purple),
+                            SizedBox(height: 10),
+                            Text("No rankings found.",
                                 style: TextStyle(fontSize: 16, color: Colors.black54)),
                           ],
                         ),

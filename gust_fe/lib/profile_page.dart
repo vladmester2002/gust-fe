@@ -203,9 +203,12 @@ class _ProfilePageState extends State<ProfilePage> {
                                         borderRadius: BorderRadius.circular(10)),
                                   ),
                                   style: const TextStyle(fontSize: 17),
-                                  validator: (val) => val == null || val.isEmpty
-                                      ? "Enter your email"
-                                      : null,
+                                  validator: (val) {
+                                    if (val == null || val.isEmpty) return "Enter your email";
+                                    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                                    if (!emailRegex.hasMatch(val)) return "Enter a valid email";
+                                    return null;
+                                  },
                                 ),
                               ],
                             ),
@@ -248,6 +251,22 @@ class _ProfilePageState extends State<ProfilePage> {
                                     foregroundColor: Colors.deepPurple,
                                     textStyle: const TextStyle(fontWeight: FontWeight.bold)),
                                 child: const Text("Cancel"),
+                              ),
+                              const SizedBox(width: 10),
+                              // 9.2: Change Password Button
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.lock_reset, color: Colors.deepPurple),
+                                label: const Text("Change Password"),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.deepPurple,
+                                  side: const BorderSide(color: Colors.deepPurple),
+                                ),
+                                onPressed: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (_) => _ChangePasswordDialog(),
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -301,6 +320,93 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                 ),
+    );
+  }
+}
+
+class _ChangePasswordDialog extends StatefulWidget {
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _oldPass = TextEditingController();
+  final _newPass = TextEditingController();
+  bool _loading = false;
+  String? _error;
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _loading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('jwt_token');
+      final resp = await http.post(
+        Uri.parse('$baseUrl/api/users/me/change-password'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json'
+        },
+        body: jsonEncode({
+          'oldPassword': _oldPass.text,
+          'newPassword': _newPass.text,
+        }),
+      );
+      if (resp.statusCode != 200) {
+        throw Exception(jsonDecode(resp.body)['message'] ?? resp.body);
+      }
+      if (mounted) Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Password changed!"), backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      setState(() => _error = "Failed: $e");
+    }
+    setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Change Password"),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _oldPass,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: "Current Password"),
+              validator: (v) => v == null || v.isEmpty ? "Enter current password" : null,
+            ),
+            TextFormField(
+              controller: _newPass,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: "New Password"),
+              validator: (v) => v == null || v.length < 6 ? "Min 6 chars" : null,
+            ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_error!, style: const TextStyle(color: Colors.red)),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _loading ? null : () => Navigator.of(context).pop(),
+          child: const Text("Cancel"),
+        ),
+        ElevatedButton(
+          onPressed: _loading ? null : _submit,
+          child: _loading
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text("Change"),
+        ),
+      ],
     );
   }
 }

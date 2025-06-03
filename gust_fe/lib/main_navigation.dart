@@ -8,7 +8,7 @@ import 'sugar_log_creation_dialog.dart';
 
 class MainNavigation extends StatefulWidget {
   final List<SugarLog> logs;
-  const MainNavigation({Key? key, required this.logs}) : super(key: key);
+  const MainNavigation({super.key, required this.logs});
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
@@ -49,8 +49,8 @@ class _MainNavigationState extends State<MainNavigation> {
     final pages = [
       HomePage(logs: _logs),
       AnalyticsPage(logs: _logs),
-      CommunityPage(), // <-- Add Community Page
-      ProfilePage(),
+      const CommunityPage(), // <-- Add Community Page
+      const ProfilePage(),
     ];
 
     return Scaffold(
@@ -60,9 +60,9 @@ class _MainNavigationState extends State<MainNavigation> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showRegisterModal,
-        child: const Icon(Icons.add),
         tooltip: "Register Sugar Intake",
         shape: const CircleBorder(),
+        child: const Icon(Icons.add),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomAppBar(

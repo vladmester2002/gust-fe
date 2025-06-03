@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'constants.dart';
-import 'package:another_flushbar/flushbar.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // 5.1
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -19,21 +19,83 @@ class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
+  // 5.3: Show/hide password toggle
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+
+  // 5.2: Password strength
+  double _passwordStrength = 0;
+  String _passwordStrengthLabel = '';
+
+  void _checkPasswordStrength(String password) {
+    double strength = 0;
+    if (password.length >= 6) strength += 0.25;
+    if (password.contains(RegExp(r'[A-Z]'))) strength += 0.25;
+    if (password.contains(RegExp(r'[0-9]'))) strength += 0.25;
+    if (password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) strength += 0.25;
+
+    String label;
+    if (strength == 0) {
+      label = '';
+    } else if (strength <= 0.25) {
+      label = 'Weak';
+    } else if (strength <= 0.5) {
+      label = 'Fair';
+    } else if (strength <= 0.75) {
+      label = 'Good';
+    } else {
+      label = 'Strong';
+    }
+
+    setState(() {
+      _passwordStrength = strength;
+      _passwordStrengthLabel = label;
+    });
+  }
+
   Future<void> _showFlushBar({
     required String message,
     required Color color,
     IconData? icon,
     Duration duration = const Duration(seconds: 2),
   }) async {
-    await Flushbar<void>(
-      message: message,
-      duration: duration,
-      backgroundColor: color,
-      flushbarPosition: FlushbarPosition.TOP,
-      margin: const EdgeInsets.all(8),
-      borderRadius: BorderRadius.circular(8),
-      icon: icon != null ? Icon(icon, color: Colors.white) : null,
-    ).show(context);
+    if (Theme.of(context).platform == TargetPlatform.linux ||
+        Theme.of(context).platform == TargetPlatform.windows ||
+        Theme.of(context).platform == TargetPlatform.macOS) {
+      // Folosește dialog pe desktop și așteaptă să fie închis
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          backgroundColor: color,
+          content: Row(
+            children: [
+              if (icon != null) Icon(icon, color: Colors.white),
+              if (icon != null) const SizedBox(width: 8),
+              Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
+            ],
+          ),
+        ),
+      );
+      // Dialogul se va închide după delay-ul de mai jos
+    } else {
+      // SnackBar pe mobil/web
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              if (icon != null) Icon(icon, color: Colors.white),
+              if (icon != null) const SizedBox(width: 8),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          backgroundColor: color,
+          duration: duration,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await Future.delayed(duration);
+    }
   }
 
   Future<void> _register() async {
@@ -52,12 +114,40 @@ class _RegisterPageState extends State<RegisterPage> {
         setState(() => _isLoading = false);
 
         if (response.statusCode == 200) {
-          await _showFlushBar(
-            message: 'Registration successful!',
-            color: Colors.green,
-            icon: Icons.check_circle,
-          );
-          Navigator.of(context).pop();
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('user_email', _emailController.text.trim());
+          await prefs.setString('user_fullName', _usernameController.text.trim());
+
+          if (Theme.of(context).platform == TargetPlatform.linux ||
+              Theme.of(context).platform == TargetPlatform.windows ||
+              Theme.of(context).platform == TargetPlatform.macOS) {
+            // Arată dialog, apoi delay, apoi închide dialogul și abia apoi pop
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => const AlertDialog(
+                backgroundColor: Colors.green,
+                content: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white),
+                    SizedBox(width: 8),
+                    Expanded(child: Text('Registration successful!', style: TextStyle(color: Colors.white))),
+                  ],
+                ),
+              ),
+            );
+            await Future.delayed(const Duration(seconds: 2));
+            if (Navigator.of(context).canPop()) Navigator.of(context).pop(); // Închide dialogul
+            await Future.delayed(const Duration(milliseconds: 100));
+            if (Navigator.of(context).canPop()) Navigator.of(context).pop(); // Navighează înapoi
+          } else {
+            await _showFlushBar(
+              message: 'Registration successful!',
+              color: Colors.green,
+              icon: Icons.check_circle,
+            );
+            Navigator.of(context).pop();
+          }
         } else if (response.statusCode == 400) {
           final message = _parseErrorMessage(response.body) ?? 'Bad request. Please check your input.';
           await _showFlushBar(
@@ -186,7 +276,8 @@ class _RegisterPageState extends State<RegisterPage> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _passwordController,
-                        obscureText: true,
+                        obscureText: _obscurePassword, // 5.3
+                        onChanged: _checkPasswordStrength, // 5.2
                         decoration: InputDecoration(
                           labelText: 'Password',
                           labelStyle: const TextStyle(fontSize: 14),
@@ -195,6 +286,17 @@ class _RegisterPageState extends State<RegisterPage> {
                             borderRadius: BorderRadius.circular(10.0),
                           ),
                           contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                              color: theme.colorScheme.primary,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
                         ),
                         style: const TextStyle(fontSize: 14),
                         validator: (value) {
@@ -207,10 +309,43 @@ class _RegisterPageState extends State<RegisterPage> {
                           return null;
                         },
                       ),
+                      // 5.2: Password strength indicator
+                      if (_passwordStrengthLabel.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6.0, bottom: 2.0),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: LinearProgressIndicator(
+                                  value: _passwordStrength,
+                                  backgroundColor: Colors.grey[300],
+                                  color: _passwordStrength < 0.5
+                                      ? Colors.red
+                                      : _passwordStrength < 0.75
+                                          ? Colors.orange
+                                          : Colors.green,
+                                  minHeight: 6,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                _passwordStrengthLabel,
+                                style: TextStyle(
+                                  color: _passwordStrength < 0.5
+                                      ? Colors.red
+                                      : _passwordStrength < 0.75
+                                          ? Colors.orange
+                                          : Colors.green,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _confirmPasswordController,
-                        obscureText: true,
+                        obscureText: _obscureConfirmPassword, // 5.3
                         decoration: InputDecoration(
                           labelText: 'Confirm Password',
                           labelStyle: const TextStyle(fontSize: 14),
@@ -219,6 +354,17 @@ class _RegisterPageState extends State<RegisterPage> {
                             borderRadius: BorderRadius.circular(10.0),
                           ),
                           contentPadding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                              color: theme.colorScheme.primary,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscureConfirmPassword = !_obscureConfirmPassword;
+                              });
+                            },
+                          ),
                         ),
                         style: const TextStyle(fontSize: 14),
                         validator: (value) {

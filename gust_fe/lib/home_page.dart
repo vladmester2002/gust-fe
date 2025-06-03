@@ -319,11 +319,11 @@ class _HomePageState extends State<HomePage> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.local_fire_department, color: Colors.deepOrange, size: 20),
+                            const Icon(Icons.local_fire_department, color: Colors.deepOrange, size: 20),
                             const SizedBox(width: 6),
                             Text(
                               '$_streak',
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: Colors.deepOrange,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -429,7 +429,7 @@ class _HomePageState extends State<HomePage> {
                               LineChartData(
                                 minY: 0,
                                 maxY: maxY.toDouble(),
-                                gridData: FlGridData(
+                                gridData: const FlGridData(
                                   show: true,
                                   drawVerticalLine: false,
                                   horizontalInterval: 10,
@@ -463,14 +463,14 @@ class _HomePageState extends State<HomePage> {
                                       },
                                     ),
                                   ),
-                                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                                 ),
                                 borderData: FlBorderData(
                                   show: true,
                                   border: Border.all(color: Colors.grey.shade200),
                                 ),
-                                clipData: FlClipData.all(),
+                                clipData: const FlClipData.all(),
                                 lineBarsData: [
                                   LineChartBarData(
                                     spots: [
@@ -580,7 +580,7 @@ class _HomePageState extends State<HomePage> {
                                                       children: [
                                                         Text(log.productName,
                                                             style: const TextStyle(fontWeight: FontWeight.w600)),
-                                                        if (log.sugarType != null && log.sugarType.trim().isNotEmpty)
+                                                        if (log.sugarType.trim().isNotEmpty)
                                                           Text('  (${log.sugarType})',
                                                               style: TextStyle(
                                                                   fontSize: 13,
@@ -597,23 +597,22 @@ class _HomePageState extends State<HomePage> {
                                                           style: TextStyle(fontSize: 13, color: Colors.grey[700]),
                                                         ),
                                                         const SizedBox(width: 10),
-                                                        if (log.emotion != null)
-                                                          Text(
-                                                            '${log.emotion.emoji} ${log.emotion.label}',
-                                                            style: TextStyle(fontSize: 13, color: Colors.grey[800]),
-                                                          ),
+                                                        Text(
+                                                          '${log.emotion.emoji} ${log.emotion.label}',
+                                                          style: TextStyle(fontSize: 13, color: Colors.grey[800]),
+                                                        ),
                                                         if (log.wasCraving)
-                                                          Row(
+                                                          const Row(
                                                             children: [
-                                                              const SizedBox(width: 10),
+                                                              SizedBox(width: 10),
                                                               Icon(Icons.bolt, color: Colors.amber, size: 16),
-                                                              const Text(" craving",
+                                                              Text(" craving",
                                                                   style: TextStyle(fontSize: 12, color: Colors.amber)),
                                                             ],
                                                           ),
                                                       ],
                                                     ),
-                                                    if (log.contextNote != null && log.contextNote.trim().isNotEmpty)
+                                                    if (log.contextNote.trim().isNotEmpty)
                                                       Padding(
                                                         padding: const EdgeInsets.only(top: 2),
                                                         child: Text(
