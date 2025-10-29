@@ -7,6 +7,9 @@ import 'package:another_flushbar/flushbar.dart'; // For notifications
 import 'constants.dart';
 import 'emotion.dart';
 import 'SugarLog.dart';
+import 'theme/app_theme.dart';
+import 'widgets/gust_text_field.dart';
+import 'widgets/gust_button.dart';
 
 class SugarLogCreationDialog extends StatefulWidget {
   final Function(SugarLog) onCreated;
@@ -244,132 +247,419 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final isEdit = widget.existingLog != null;
 
-    return AlertDialog(
-      title: Text(widget.existingLog == null ? "Log Sugar Intake" : "Edit Sugar Log"),
-      content: StatefulBuilder(
-        builder: (context, setState) {
-          return SizedBox(
-            width: 350,
-            child: SingleChildScrollView(
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: sugarController,
-                      decoration: const InputDecoration(labelText: "Sugar (g)"),
-                      keyboardType: TextInputType.number,
-                      validator: (v) => v == null || v.isEmpty ? "Required" : null,
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: EdgeInsets.all(AppTheme.spaceMD),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 400),
+        decoration: BoxDecoration(
+          color: AppTheme.cardWhite,
+          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+          boxShadow: AppTheme.shadowLevel2,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: EdgeInsets.all(AppTheme.spaceLG),
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(AppTheme.radiusLarge),
+                  topRight: Radius.circular(AppTheme.radiusLarge),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(AppTheme.spaceSM),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                     ),
-                    TextFormField(
-                      controller: productNameController,
-                      decoration: const InputDecoration(labelText: "Product/Food Name"),
+                    child: Icon(
+                      isEdit ? Icons.edit : Icons.add_circle_outline,
+                      color: Colors.white,
+                      size: 24,
                     ),
-                    TextFormField(
-                      controller: sugarTypeController,
-                      decoration: const InputDecoration(labelText: "Sugar Type"),
+                  ),
+                  SizedBox(width: AppTheme.spaceMD),
+                  Expanded(
+                    child: Text(
+                      isEdit ? "Edit Sugar Log" : "Log Sugar Intake",
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
-                    TextFormField(
-                      controller: contextNoteController,
-                      decoration: const InputDecoration(labelText: "Context Note"),
-                    ),
-                    TextFormField(
-                      controller: locationController,
-                      decoration: const InputDecoration(labelText: "Location"),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            "Date: ${DateFormat.yMd().format(selectedDate)} (today only)",
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Content
+            Flexible(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(AppTheme.spaceLG),
+                child: StatefulBuilder(
+                  builder: (context, setState) {
+                    return Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Sugar Amount Field
+                          GustTextField(
+                            controller: sugarController,
+                            label: "Sugar (g)",
+                            prefixIcon: Icons.local_drink,
+                            keyboardType: TextInputType.number,
+                            validator: (v) => v == null || v.isEmpty ? "Required" : null,
                           ),
-                        ),
-                        // No calendar picker: can't change date
-                        const Icon(Icons.today, color: Colors.grey, size: 20)
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text("Time: ${selectedTime.format(context)}"),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.access_time, color: theme.colorScheme.primary),
-                          onPressed: () async {
-                            final picked = await showTimePicker(
-                              context: context,
-                              initialTime: selectedTime,
-                            );
-                            if (picked != null) {
-                              setState(() => selectedTime = picked);
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      "Tip: Pick the time you actually consumed sugar for accurate analytics.",
-                      style: TextStyle(color: Colors.deepPurple[300], fontSize: 12),
-                    ),
-                    DropdownButtonFormField<Emotion>(
-                      value: selectedEmotion,
-                      onChanged: (e) => setState(() => selectedEmotion = e!),
-                      items: Emotion.values.map((e) => DropdownMenuItem(
-                        value: e,
-                        child: Text("${e.emoji} ${e.label}"),
-                      )).toList(),
-                      decoration: const InputDecoration(labelText: "Emotion"),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Was craving?"),
-                        Switch(
-                          value: wasCraving,
-                          onChanged: (v) => setState(() => wasCraving = v),
-                        )
-                      ],
-                    ),
-                  ],
+                          SizedBox(height: AppTheme.spaceMD),
+                          
+                          // Product Name Field
+                          GustTextField(
+                            controller: productNameController,
+                            label: "Product/Food Name",
+                            prefixIcon: Icons.fastfood,
+                          ),
+                          SizedBox(height: AppTheme.spaceMD),
+                          
+                          // Sugar Type Field
+                          GustTextField(
+                            controller: sugarTypeController,
+                            label: "Sugar Type",
+                            prefixIcon: Icons.category,
+                          ),
+                          SizedBox(height: AppTheme.spaceMD),
+                          
+                          // Context Note Field
+                          GustTextField(
+                            controller: contextNoteController,
+                            label: "Context Note",
+                            prefixIcon: Icons.notes,
+                            maxLines: 2,
+                          ),
+                          SizedBox(height: AppTheme.spaceMD),
+                          
+                          // Location Field
+                          GustTextField(
+                            controller: locationController,
+                            label: "Location",
+                            prefixIcon: Icons.location_on,
+                          ),
+                          SizedBox(height: AppTheme.spaceLG),
+                          
+                          // Date Section
+                          Container(
+                            padding: EdgeInsets.all(AppTheme.spaceMD),
+                            decoration: BoxDecoration(
+                              color: AppTheme.backgroundGrey,
+                              borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                              border: Border.all(color: AppTheme.dividerGrey.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.all(AppTheme.spaceSM),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.infoBlue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                                  ),
+                                  child: Icon(Icons.today, color: AppTheme.infoBlue, size: 20),
+                                ),
+                                SizedBox(width: AppTheme.spaceMD),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "Date",
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppTheme.textSecondary,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        "${DateFormat.yMd().format(selectedDate)} (today only)",
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          color: AppTheme.textPrimary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: AppTheme.spaceMD),
+                          
+                          // Time Section
+                          Container(
+                            padding: EdgeInsets.all(AppTheme.spaceMD),
+                            decoration: BoxDecoration(
+                              color: AppTheme.backgroundGrey,
+                              borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                              border: Border.all(color: AppTheme.dividerGrey.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.all(AppTheme.spaceSM),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryPurple.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                                  ),
+                                  child: Icon(Icons.access_time, color: AppTheme.primaryPurple, size: 20),
+                                ),
+                                SizedBox(width: AppTheme.spaceMD),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "Time",
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppTheme.textSecondary,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        selectedTime.format(context),
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          color: AppTheme.textPrimary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.edit, color: AppTheme.primaryPurple, size: 20),
+                                  onPressed: () async {
+                                    final picked = await showTimePicker(
+                                      context: context,
+                                      initialTime: selectedTime,
+                                    );
+                                    if (picked != null) {
+                                      setState(() => selectedTime = picked);
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: AppTheme.spaceSM),
+                          
+                          // Tip
+                          Container(
+                            padding: EdgeInsets.all(AppTheme.spaceSM),
+                            decoration: BoxDecoration(
+                              color: AppTheme.infoBlue.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.lightbulb_outline, color: AppTheme.infoBlue, size: 16),
+                                SizedBox(width: AppTheme.spaceSM),
+                                Expanded(
+                                  child: Text(
+                                    "Tip: Pick the time you actually consumed sugar for accurate analytics.",
+                                    style: TextStyle(
+                                      color: AppTheme.infoBlue,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: AppTheme.spaceLG),
+                          
+                          // Emotion Dropdown
+                          Text(
+                            "Emotion",
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          SizedBox(height: AppTheme.spaceSM),
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: AppTheme.spaceMD),
+                            decoration: BoxDecoration(
+                              color: AppTheme.backgroundGrey,
+                              borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                              border: Border.all(color: AppTheme.dividerGrey.withOpacity(0.3)),
+                            ),
+                            child: DropdownButtonFormField<Emotion>(
+                              value: selectedEmotion,
+                              onChanged: (e) => setState(() => selectedEmotion = e!),
+                              items: Emotion.values.map((e) => DropdownMenuItem(
+                                value: e,
+                                child: Row(
+                                  children: [
+                                    Text(e.emoji, style: const TextStyle(fontSize: 20)),
+                                    SizedBox(width: AppTheme.spaceSM),
+                                    Text(e.label, style: TextStyle(color: AppTheme.textPrimary)),
+                                  ],
+                                ),
+                              )).toList(),
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              icon: Icon(Icons.arrow_drop_down, color: AppTheme.primaryPurple),
+                            ),
+                          ),
+                          SizedBox(height: AppTheme.spaceLG),
+                          
+                          // Craving Switch
+                          Container(
+                            padding: EdgeInsets.all(AppTheme.spaceMD),
+                            decoration: BoxDecoration(
+                              color: AppTheme.backgroundGrey,
+                              borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                              border: Border.all(color: AppTheme.dividerGrey.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.all(AppTheme.spaceSM),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.warningOrange.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                                  ),
+                                  child: Icon(Icons.bolt, color: AppTheme.warningOrange, size: 20),
+                                ),
+                                SizedBox(width: AppTheme.spaceMD),
+                                Expanded(
+                                  child: Text(
+                                    "Was craving?",
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                Switch(
+                                  value: wasCraving,
+                                  onChanged: (v) => setState(() => wasCraving = v),
+                                  activeColor: AppTheme.warningOrange,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
-          );
-        },
+            
+            // Actions Footer
+            Container(
+              padding: EdgeInsets.all(AppTheme.spaceLG),
+              decoration: BoxDecoration(
+                color: AppTheme.backgroundGrey,
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(AppTheme.radiusLarge),
+                  bottomRight: Radius.circular(AppTheme.radiusLarge),
+                ),
+              ),
+              child: isEdit
+                  ? Row(
+                      children: [
+                        Expanded(
+                          child: GustButton(
+                            text: "Delete",
+                            onPressed: _loading ? null : _deleteLog,
+                            type: ButtonType.danger,
+                            icon: Icons.delete_outline,
+                          ),
+                        ),
+                        SizedBox(width: AppTheme.spaceSM),
+                        Expanded(
+                          child: GustButton(
+                            text: "Cancel",
+                            onPressed: _loading ? null : () => Navigator.pop(context),
+                            type: ButtonType.secondary,
+                          ),
+                        ),
+                        SizedBox(width: AppTheme.spaceSM),
+                        Expanded(
+                          child: GustButton(
+                            text: "Update",
+                            onPressed: _loading
+                                ? null
+                                : () async {
+                                    if (!_formKey.currentState!.validate()) return;
+                                    await _updateLog();
+                                  },
+                            type: ButtonType.primary,
+                            isLoading: _loading,
+                            icon: Icons.check,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _loading ? null : () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppTheme.textSecondary,
+                              side: BorderSide(color: AppTheme.dividerGrey),
+                              padding: EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                              ),
+                            ),
+                            child: const Text("Cancel"),
+                          ),
+                        ),
+                        SizedBox(width: AppTheme.spaceMD),
+                        Expanded(
+                          flex: 2,
+                          child: GustButton(
+                            text: "Log",
+                            onPressed: _loading
+                                ? null
+                                : () async {
+                                    if (!_formKey.currentState!.validate()) return;
+                                    await _createLog();
+                                  },
+                            type: ButtonType.primary,
+                            isLoading: _loading,
+                            icon: Icons.add,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
       ),
-      actions: [
-        if (widget.existingLog != null)
-          TextButton(
-            onPressed: _loading ? null : _deleteLog,
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text("Delete"),
-          ),
-        TextButton(
-          onPressed: _loading ? null : () => Navigator.pop(context),
-          child: const Text("Cancel"),
-        ),
-        ElevatedButton(
-          onPressed: _loading
-              ? null
-              : () async {
-                  if (!_formKey.currentState!.validate()) return;
-                  if (widget.existingLog == null) {
-                    await _createLog();
-                  } else {
-                    await _updateLog();
-                  }
-                },
-          child: _loading
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-              : Text(widget.existingLog == null ? "Log" : "Update"),
-        ),
-      ],
     );
   }
 }

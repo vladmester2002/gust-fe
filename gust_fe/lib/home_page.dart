@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:math'; // <--- NEW for max()
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:http/http.dart' as http;
@@ -10,6 +10,8 @@ import 'constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'sugar_log_creation_dialog.dart';
 import 'package:another_flushbar/flushbar.dart';
+import 'theme/app_theme.dart';
+import 'widgets/gust_card.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.logs});
@@ -233,8 +235,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final todayLogs = _logs.where((log) =>
@@ -269,13 +269,21 @@ class _HomePageState extends State<HomePage> {
     final remaining = (dailyGoal - todaySugar).clamp(0, dailyGoal);
 
     return Scaffold(
+      backgroundColor: AppTheme.backgroundGrey,
       appBar: AppBar(
-        backgroundColor: theme.colorScheme.inversePrimary,
-        title: const Text('GUST Dashboard'),
+        backgroundColor: AppTheme.softLavender,
+        elevation: 0,
+        title: Text(
+          'GUST Dashboard',
+          style: TextStyle(
+            color: AppTheme.primaryPurple,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh, color: AppTheme.primaryPurple),
             onPressed: () {
               _fetchLogs();
               _loadUserStreak();
@@ -288,337 +296,595 @@ class _HomePageState extends State<HomePage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+              padding: EdgeInsets.all(AppTheme.spaceMD),
               child: Column(
                 children: [
+                  // Welcome Section with Gradient
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                      boxShadow: AppTheme.shadowLevel2,
+                    ),
+                    padding: EdgeInsets.all(AppTheme.spaceLG),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: AppTheme.shadowLevel1,
+                          ),
+                          child: CircleAvatar(
+                            radius: 28,
+                            backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
+                            child: Icon(Icons.person, color: AppTheme.primaryPurple, size: 28),
+                          ),
+                        ),
+                        SizedBox(width: AppTheme.spaceMD),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Welcome back,',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.9),
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _fullName ?? 'GUST User',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Streak Badge
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppTheme.spaceMD,
+                            vertical: AppTheme.spaceSM,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                            boxShadow: AppTheme.shadowLevel1,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.local_fire_department, color: AppTheme.warningOrange, size: 24),
+                              SizedBox(width: AppTheme.spaceSM),
+                              Text(
+                                '$_streak',
+                                style: TextStyle(
+                                  color: AppTheme.warningOrange,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: AppTheme.spaceLG),
+                  
+                  // Quick Stats Row
                   Row(
                     children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundColor: theme.colorScheme.primary.withOpacity(0.2),
-                        child: Icon(Icons.person, color: theme.colorScheme.primary),
-                      ),
-                      const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Welcome back,', style: theme.textTheme.bodySmall),
-                            Text(
-                              _fullName ?? 'GUST User',
-                              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                          ],
+                        child: GustCard(
+                          padding: EdgeInsets.all(AppTheme.spaceMD),
+                          elevation: 3,
+                          child: Column(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.all(AppTheme.spaceSM),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.successGreen.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.check_circle, color: AppTheme.successGreen, size: 24),
+                              ),
+                              SizedBox(height: AppTheme.spaceSM),
+                              Text(
+                                '${todayLogs.length}',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                'Logs Today',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withOpacity(0.13),
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.local_fire_department, color: Colors.deepOrange, size: 20),
-                            const SizedBox(width: 6),
-                            Text(
-                              '$_streak',
-                              style: TextStyle(
-                                color: Colors.deepOrange,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
+                      SizedBox(width: AppTheme.spaceMD),
+                      Expanded(
+                        child: GustCard(
+                          padding: EdgeInsets.all(AppTheme.spaceMD),
+                          elevation: 3,
+                          child: Column(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.all(AppTheme.spaceSM),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.infoBlue.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(Icons.trending_up, color: AppTheme.infoBlue, size: 24),
                               ),
-                            ),
-                            const SizedBox(width: 3),
-                            Text(
-                              "day${_streak == 1 ? '' : 's'}",
-                              style: TextStyle(fontSize: 13, color: Colors.grey[800]),
-                            ),
-                          ],
+                              SizedBox(height: AppTheme.spaceSM),
+                              Text(
+                                '${dailyGoal}g',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                'Daily Goal',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  Card(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.0)),
+                  SizedBox(height: AppTheme.spaceLG),
+                  
+                  // Today's Sugar Intake Card
+                  GustCard(
+                    padding: EdgeInsets.all(AppTheme.spaceLG),
                     elevation: 4,
-                    child: Padding(
-                      padding: const EdgeInsets.all(18.0),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.coffee, color: theme.colorScheme.primary, size: 32),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      "Today's Sugar Intake",
-                                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      "$todaySugar g / $dailyGoal g",
-                                      style: TextStyle(
-                                          fontSize: 17,
-                                          color: todaySugar > dailyGoal ? Colors.red : Colors.green,
-                                          fontWeight: FontWeight.w700),
-                                    ),
-                                  ],
-                                ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(AppTheme.spaceMD),
+                              decoration: BoxDecoration(
+                                color: todaySugar > dailyGoal 
+                                    ? AppTheme.errorRed.withOpacity(0.1)
+                                    : AppTheme.successGreen.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                               ),
-                              Column(
+                              child: Icon(
+                                Icons.local_drink,
+                                color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.successGreen,
+                                size: 32,
+                              ),
+                            ),
+                            SizedBox(width: AppTheme.spaceMD),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Icon(todaySugar > dailyGoal ? Icons.warning_amber : Icons.check_circle,
-                                      color: todaySugar > dailyGoal ? Colors.red : Colors.green),
                                   Text(
-                                    todaySugar > dailyGoal ? "Over" : "Good",
+                                    "Today's Sugar Intake",
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          color: AppTheme.textPrimary,
+                                        ),
+                                  ),
+                                  SizedBox(height: AppTheme.spaceXS),
+                                  Text(
+                                    "$todaySugar g / $dailyGoal g",
                                     style: TextStyle(
-                                        color: todaySugar > dailyGoal ? Colors.red : Colors.green,
-                                        fontWeight: FontWeight.w600),
+                                      fontSize: 20,
+                                      color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.successGreen,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          LinearProgressIndicator(
+                            ),
+                            Container(
+                              padding: EdgeInsets.all(AppTheme.spaceMD),
+                              decoration: BoxDecoration(
+                                color: todaySugar > dailyGoal 
+                                    ? AppTheme.errorRed.withOpacity(0.1)
+                                    : AppTheme.successGreen.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                                border: Border.all(
+                                  color: todaySugar > dailyGoal 
+                                      ? AppTheme.errorRed.withOpacity(0.3)
+                                      : AppTheme.successGreen.withOpacity(0.3),
+                                  width: 2,
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    todaySugar > dailyGoal ? Icons.warning_amber_rounded : Icons.check_circle_rounded,
+                                    color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.successGreen,
+                                    size: 28,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    todaySugar > dailyGoal ? "OVER" : "GOOD",
+                                    style: TextStyle(
+                                      color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.successGreen,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: AppTheme.spaceMD),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                          child: LinearProgressIndicator(
                             value: (todaySugar / dailyGoal).clamp(0.0, 1.0),
-                            backgroundColor: Colors.grey.shade300,
+                            backgroundColor: AppTheme.dividerGrey,
                             color: todaySugar > dailyGoal
-                                ? Colors.red
-                                : (todaySugar > dailyGoal * 0.7 ? Colors.orange : Colors.green),
-                            minHeight: 9,
-                            borderRadius: BorderRadius.circular(6),
+                                ? AppTheme.errorRed
+                                : (todaySugar > dailyGoal * 0.7 ? AppTheme.warningOrange : AppTheme.successGreen),
+                            minHeight: 10,
                           ),
-                          const SizedBox(height: 7),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Text("Remaining: $remaining g",
+                        ),
+                        SizedBox(height: AppTheme.spaceMD),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  todaySugar > dailyGoal ? Icons.error_outline : Icons.favorite_border,
+                                  size: 18,
+                                  color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.successGreen,
+                                ),
+                                SizedBox(width: AppTheme.spaceXS),
+                                Text(
+                                  todaySugar > dailyGoal 
+                                      ? "Exceeded by ${todaySugar - dailyGoal} g" 
+                                      : "Remaining: $remaining g",
                                   style: TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                      color: todaySugar > dailyGoal ? Colors.red : Colors.grey.shade800)),
-                            ],
-                          )
-                        ],
-                      ),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                    color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.textPrimary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: AppTheme.spaceSM,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: todaySugar > dailyGoal 
+                                    ? AppTheme.errorRed.withOpacity(0.1)
+                                    : AppTheme.infoBlue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                              ),
+                              child: Text(
+                                "${((todaySugar / dailyGoal) * 100).toStringAsFixed(0)}%",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.infoBlue,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 18),
-                  Card(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 5,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.show_chart, color: theme.colorScheme.primary, size: 28),
-                              const SizedBox(width: 8),
-                              Text("Sugar Trends (7 Days)", style: theme.textTheme.titleMedium),
-                            ],
-                          ),
-                          SizedBox(
-                            height: 180,
-                            child: LineChart(
-                              LineChartData(
-                                minY: 0,
-                                maxY: maxY.toDouble(),
-                                gridData: FlGridData(
-                                  show: true,
-                                  drawVerticalLine: false,
-                                  horizontalInterval: 10,
-                                ),
-                                titlesData: FlTitlesData(
-                                  bottomTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      interval: 1,
-                                      getTitlesWidget: (value, _) {
-                                        int idx = value.toInt();
-                                        if (idx < 0 || idx >= dataPoints.length) return const SizedBox();
-                                        final date = dataPoints[idx].key;
-                                        return Padding(
-                                          padding: const EdgeInsets.only(top: 4),
-                                          child: Text(DateFormat('E').format(date), style: const TextStyle(fontSize: 12)),
-                                        );
-                                      },
-                                    ),
+                  SizedBox(height: AppTheme.spaceLG),
+                  
+                  // Weekly Trends Card
+                  GustCard(
+                    padding: EdgeInsets.all(AppTheme.spaceLG),
+                    elevation: 4,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(AppTheme.spaceSM),
+                              decoration: BoxDecoration(
+                                color: AppTheme.infoBlue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                              ),
+                              child: Icon(Icons.show_chart, color: AppTheme.infoBlue, size: 24),
+                            ),
+                            SizedBox(width: AppTheme.spaceMD),
+                            Text(
+                              "Sugar Trends (7 Days)",
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.textPrimary,
                                   ),
-                                  leftTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      reservedSize: 36, // a bit more space
-                                      getTitlesWidget: (value, meta) {
-                                        // only show integer ticks (0, 10, 20, 30, 40, ...)
-                                        if (value % 10 == 0) {
-                                          return Text('${value.toInt()}g', style: const TextStyle(fontSize: 13));
-                                        }
-                                        return const SizedBox();
-                                      },
-                                    ),
-                                  ),
-                                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                ),
-                                borderData: FlBorderData(
-                                  show: true,
-                                  border: Border.all(color: Colors.grey.shade200),
-                                ),
-                                clipData: FlClipData.all(),
-                                lineBarsData: [
-                                  LineChartBarData(
-                                    spots: [
-                                      for (int i = 0; i < dataPoints.length; i++)
-                                        FlSpot(i.toDouble(), dataPoints[i].value.toDouble())
-                                    ],
-                                    isCurved: false,
-                                    barWidth: 4,
-                                    color: Colors.deepPurple,
-                                    belowBarData: BarAreaData(
-                                      show: true,
-                                      color: Colors.deepPurple.withOpacity(0.13),
-                                    ),
-                                    dotData: FlDotData(
-                                      show: true,
-                                      getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
-                                        radius: 4,
-                                        color: Colors.deepPurple,
-                                        strokeWidth: 0,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                // --------------- TOOLTIP SECTION ---------------
-                                lineTouchData: LineTouchData(
-                                  enabled: true,
-                                  handleBuiltInTouches: true,
-                                  touchTooltipData: LineTouchTooltipData(
-                                    tooltipBgColor: Colors.white,
-                                    tooltipRoundedRadius: 10,
-                                    tooltipPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                    tooltipBorder: BorderSide(color: Colors.deepPurple.shade100, width: 1.5),
-                                    getTooltipItems: (touchedSpots) {
-                                      return touchedSpots.map((touchedSpot) {
-                                        final idx = touchedSpot.spotIndex;
-                                        final dayName = DateFormat('EEEE').format(dataPoints[idx].key);
-                                        final value = dataPoints[idx].value;
-                                        return LineTooltipItem(
-                                          "$dayName\n",
-                                          const TextStyle(
-                                            color: Colors.deepPurple,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15,
-                                            height: 1.3,
-                                          ),
-                                          children: [
-                                            TextSpan(
-                                              text: "$value g",
-                                              style: const TextStyle(
-                                                color: Colors.black87,
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 15,
-                                                height: 1.6,
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      }).toList();
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: AppTheme.spaceMD),
+                        SizedBox(
+                          height: 180,
+                          child: LineChart(
+                            LineChartData(
+                              minY: 0,
+                              maxY: maxY.toDouble(),
+                              gridData: FlGridData(
+                                show: true,
+                                drawVerticalLine: false,
+                                horizontalInterval: 10,
+                                getDrawingHorizontalLine: (value) {
+                                  return FlLine(
+                                    color: AppTheme.dividerGrey.withOpacity(0.3),
+                                    strokeWidth: 1,
+                                  );
+                                },
+                              ),
+                              titlesData: FlTitlesData(
+                                bottomTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    interval: 1,
+                                    getTitlesWidget: (value, _) {
+                                      int idx = value.toInt();
+                                      if (idx < 0 || idx >= dataPoints.length) return const SizedBox();
+                                      final date = dataPoints[idx].key;
+                                      return Padding(
+                                        padding: const EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          DateFormat('E').format(date),
+                                          style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                        ),
+                                      );
                                     },
                                   ),
                                 ),
-                                // --------------- END TOOLTIP SECTION ---------------
+                                leftTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 36,
+                                    getTitlesWidget: (value, meta) {
+                                      if (value % 10 == 0) {
+                                        return Text(
+                                          '${value.toInt()}g',
+                                          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                                        );
+                                      }
+                                      return const SizedBox();
+                                    },
+                                  ),
+                                ),
+                                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                              ),
+                              borderData: FlBorderData(
+                                show: true,
+                                border: Border.all(color: AppTheme.dividerGrey.withOpacity(0.3)),
+                              ),
+                              clipData: FlClipData.all(),
+                              lineBarsData: [
+                                LineChartBarData(
+                                  spots: [
+                                    for (int i = 0; i < dataPoints.length; i++)
+                                      FlSpot(i.toDouble(), dataPoints[i].value.toDouble())
+                                  ],
+                                  isCurved: true,
+                                  barWidth: 3,
+                                  color: AppTheme.primaryPurple,
+                                  belowBarData: BarAreaData(
+                                    show: true,
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        AppTheme.primaryPurple.withOpacity(0.2),
+                                        AppTheme.primaryPurple.withOpacity(0.05),
+                                      ],
+                                    ),
+                                  ),
+                                  dotData: FlDotData(
+                                    show: true,
+                                    getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                                      radius: 5,
+                                      color: AppTheme.primaryPurple,
+                                      strokeWidth: 2,
+                                      strokeColor: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              lineTouchData: LineTouchData(
+                                enabled: true,
+                                handleBuiltInTouches: true,
+                                touchTooltipData: LineTouchTooltipData(
+                                  tooltipBgColor: Colors.white,
+                                  tooltipRoundedRadius: AppTheme.radiusSmall,
+                                  tooltipPadding: EdgeInsets.all(AppTheme.spaceSM),
+                                  tooltipBorder: BorderSide(color: AppTheme.primaryPurple.withOpacity(0.3), width: 1.5),
+                                  getTooltipItems: (touchedSpots) {
+                                    return touchedSpots.map((touchedSpot) {
+                                      final idx = touchedSpot.spotIndex;
+                                      final dayName = DateFormat('EEEE').format(dataPoints[idx].key);
+                                      final value = dataPoints[idx].value;
+                                      return LineTooltipItem(
+                                        "$dayName\n",
+                                        TextStyle(
+                                          color: AppTheme.primaryPurple,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                          height: 1.3,
+                                        ),
+                                        children: [
+                                          TextSpan(
+                                            text: "$value g",
+                                            style: TextStyle(
+                                              color: AppTheme.textPrimary,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 15,
+                                              height: 1.6,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList();
+                                  },
+                                ),
                               ),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 18),
-                  Card(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.0)),
-                    elevation: 3,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.fastfood, color: theme.colorScheme.primary, size: 26),
-                              const SizedBox(width: 6),
-                              Text("Today's Foods", style: theme.textTheme.titleMedium),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          todayLogs.isEmpty
-                              ? Text("No entries yet. Start tracking your sugar today!",
-                                  style: TextStyle(color: Colors.grey.shade600))
+                  
+                  SizedBox(height: AppTheme.spaceLG),
+                  
+                  // Today's Foods Card
+                  GustCard(
+                    padding: EdgeInsets.all(AppTheme.spaceLG),
+                    elevation: 4,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(AppTheme.spaceSM),
+                              decoration: BoxDecoration(
+                                color: AppTheme.accentCoral.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                              ),
+                              child: Icon(Icons.fastfood, color: AppTheme.accentCoral, size: 24),
+                            ),
+                            SizedBox(width: AppTheme.spaceMD),
+                            Text(
+                              "Today's Foods",
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.textPrimary,
+                                  ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: AppTheme.spaceMD),
+                        todayLogs.isEmpty
+                            ? Padding(
+                                padding: EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
+                                child: Text(
+                                  "No entries yet. Start tracking your sugar today!",
+                                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                                ),
+                              )
                               : Column(
                                   children: [
                                     for (var log in todayLogs)
                                       GestureDetector(
                                         onTap: () => _showRegisterModal(editLog: log),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                        child: Container(
+                                          margin: EdgeInsets.only(bottom: AppTheme.spaceSM),
+                                          padding: EdgeInsets.all(AppTheme.spaceMD),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.backgroundGrey,
+                                            borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                                            border: Border.all(color: AppTheme.dividerGrey.withOpacity(0.3)),
+                                          ),
                                           child: Row(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Icon(Icons.circle, size: 11, color: theme.colorScheme.primary),
-                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding: EdgeInsets.all(6),
+                                                decoration: BoxDecoration(
+                                                  color: AppTheme.primaryPurple.withOpacity(0.1),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(Icons.circle, size: 8, color: AppTheme.primaryPurple),
+                                              ),
+                                              SizedBox(width: AppTheme.spaceSM),
                                               Expanded(
                                                 child: Column(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     Row(
                                                       children: [
-                                                        Text(log.productName,
-                                                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                                                        Text(
+                                                          log.productName,
+                                                          style: TextStyle(
+                                                            fontWeight: FontWeight.w600,
+                                                            color: AppTheme.textPrimary,
+                                                          ),
+                                                        ),
                                                         if (log.sugarType != null && log.sugarType.trim().isNotEmpty)
-                                                          Text('  (${log.sugarType})',
-                                                              style: TextStyle(
-                                                                  fontSize: 13,
-                                                                  color: Colors.grey[600],
-                                                                  fontStyle: FontStyle.italic)),
+                                                          Text(
+                                                            '  (${log.sugarType})',
+                                                            style: TextStyle(
+                                                              fontSize: 13,
+                                                              color: AppTheme.textSecondary,
+                                                              fontStyle: FontStyle.italic,
+                                                            ),
+                                                          ),
                                                       ],
                                                     ),
+                                                    SizedBox(height: 4),
                                                     Row(
                                                       children: [
-                                                        Icon(Icons.access_time, size: 14, color: Colors.grey[500]),
-                                                        const SizedBox(width: 2),
+                                                        Icon(Icons.access_time, size: 14, color: AppTheme.textSecondary),
+                                                        const SizedBox(width: 4),
                                                         Text(
                                                           '${log.hour.toString().padLeft(2, '0')}:${log.minute.toString().padLeft(2, '0')}',
-                                                          style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                                                          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
                                                         ),
-                                                        const SizedBox(width: 10),
+                                                        const SizedBox(width: 12),
                                                         if (log.emotion != null)
                                                           Text(
                                                             '${log.emotion.emoji} ${log.emotion.label}',
-                                                            style: TextStyle(fontSize: 13, color: Colors.grey[800]),
+                                                            style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
                                                           ),
                                                         if (log.wasCraving)
                                                           Row(
                                                             children: [
-                                                              const SizedBox(width: 10),
-                                                              Icon(Icons.bolt, color: Colors.amber, size: 16),
-                                                              const Text(" craving",
-                                                                  style: TextStyle(fontSize: 12, color: Colors.amber)),
+                                                              const SizedBox(width: 12),
+                                                              Icon(Icons.bolt, color: AppTheme.warningOrange, size: 16),
+                                                              Text(
+                                                                " craving",
+                                                                style: TextStyle(
+                                                                  fontSize: 12,
+                                                                  color: AppTheme.warningOrange,
+                                                                  fontWeight: FontWeight.w500,
+                                                                ),
+                                                              ),
                                                             ],
                                                           ),
                                                       ],
                                                     ),
                                                     if (log.contextNote != null && log.contextNote.trim().isNotEmpty)
                                                       Padding(
-                                                        padding: const EdgeInsets.only(top: 2),
+                                                        padding: const EdgeInsets.only(top: 4),
                                                         child: Text(
                                                           log.contextNote,
-                                                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                                          style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                                                           maxLines: 2,
                                                           overflow: TextOverflow.ellipsis,
                                                         ),
@@ -626,51 +892,82 @@ class _HomePageState extends State<HomePage> {
                                                   ],
                                                 ),
                                               ),
-                                              const SizedBox(width: 5),
-                                              Text(
-                                                "${log.sugarGrams}g",
-                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                              SizedBox(width: AppTheme.spaceSM),
+                                              Container(
+                                                padding: EdgeInsets.symmetric(
+                                                  horizontal: AppTheme.spaceSM,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: AppTheme.primaryPurple.withOpacity(0.1),
+                                                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                                                ),
+                                                child: Text(
+                                                  "${log.sugarGrams}g",
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 15,
+                                                    color: AppTheme.primaryPurple,
+                                                  ),
+                                                ),
                                               ),
                                             ],
                                           ),
                                         ),
                                       ),
                                   ],
-                                )
-                        ],
-                      ),
+                                ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 18),
-                  Card(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.0)),
-                    elevation: 2,
+                  
+                  SizedBox(height: AppTheme.spaceLG),
+                  
+                  // Daily Goal Tracker Card
+                  GustCard(
+                    padding: EdgeInsets.zero,
+                    elevation: 4,
                     child: InkWell(
                       onTap: _updateDailyGoalDialog,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                        padding: EdgeInsets.all(AppTheme.spaceLG),
                         child: Row(
                           children: [
-                            Icon(Icons.flag, color: theme.colorScheme.primary, size: 28),
-                            const SizedBox(width: 12),
+                            Container(
+                              padding: EdgeInsets.all(AppTheme.spaceMD),
+                              decoration: BoxDecoration(
+                                gradient: AppTheme.successGradient,
+                                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                              ),
+                              child: Icon(Icons.flag, color: Colors.white, size: 28),
+                            ),
+                            SizedBox(width: AppTheme.spaceMD),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("Daily Goal Tracker", style: theme.textTheme.titleMedium),
-                                  const SizedBox(height: 2),
+                                  Text(
+                                    "Daily Goal Tracker",
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          color: AppTheme.textPrimary,
+                                        ),
+                                  ),
+                                  SizedBox(height: 4),
                                   Text(
                                     "Goal: $dailyGoal g sugar/day",
-                                    style: const TextStyle(fontSize: 15),
+                                    style: TextStyle(fontSize: 15, color: AppTheme.textPrimary),
                                   ),
-                                  const Text(
+                                  SizedBox(height: 2),
+                                  Text(
                                     "Tap to set your goal.",
-                                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                                   ),
                                 ],
                               ),
                             ),
+                            Icon(Icons.edit, color: AppTheme.primaryPurple, size: 20),
                           ],
                         ),
                       ),

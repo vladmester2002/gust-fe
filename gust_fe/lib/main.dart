@@ -6,7 +6,8 @@ import 'package:gust_fe/analytics_page.dart';
 import 'package:gust_fe/Login.dart';
 import 'package:gust_fe/SugarLog.dart';
 import 'package:gust_fe/sugar_log_creation_dialog.dart';
-import 'package:gust_fe/main_navigation.dart'; // <-- use the new main_navigation.dart!
+import 'package:gust_fe/main_navigation.dart';
+import 'package:gust_fe/theme/app_theme.dart';
 
 void main() {
   runApp(const MyApp());
@@ -32,10 +33,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'GUST App',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.lightTheme,
       initialRoute: AppRoutes.login,        // This is "/"
       routes: {
         AppRoutes.login: (context) => const LoginPage(),              // "/" route: LoginPage

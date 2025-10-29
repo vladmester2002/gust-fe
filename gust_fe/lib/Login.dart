@@ -4,6 +4,9 @@ import 'package:http/http.dart' as http;
 import 'constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:another_flushbar/flushbar.dart';
+import 'theme/app_theme.dart';
+import 'widgets/gust_button.dart';
+import 'widgets/gust_text_field.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -92,94 +95,130 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: theme.colorScheme.inversePrimary,
-        title: const Text('GUST Login'),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Card(
-              elevation: 8.0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16.0),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(
-                        'GUST',
-                        style: TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: AppTheme.primaryGradient,
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.spaceLG),
+              child: Card(
+                elevation: 12.0,
+                shadowColor: Colors.black.withOpacity(0.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(AppTheme.spaceXL),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                      // App Logo/Title
+                      Container(
+                        padding: EdgeInsets.all(AppTheme.spaceMD),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppTheme.primaryPurple.withOpacity(0.1),
+                        ),
+                        child: Icon(
+                          Icons.local_drink_outlined,
+                          size: 64,
+                          color: AppTheme.primaryPurple,
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      TextFormField(
+                      SizedBox(height: AppTheme.spaceMD),
+                      Text(
+                        'GUST',
+                        style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                              color: AppTheme.primaryPurple,
+                              fontSize: 48,
+                            ),
+                      ),
+                      SizedBox(height: AppTheme.spaceSM),
+                      Text(
+                        'Track your sugar, improve your health',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: AppTheme.textSecondary,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: AppTheme.spaceXL),
+                      
+                      // Email Field
+                      GustTextField(
                         controller: _usernameController,
-                        decoration: InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: Icon(Icons.email_outlined, color: theme.colorScheme.primary),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0)),
-                          contentPadding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 10.0),
-                        ),
+                        label: 'Email',
+                        hint: 'Enter your email',
+                        prefixIcon: Icons.email_outlined,
                         keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
                         validator: (value) {
                           if (value == null || value.isEmpty) return 'Please enter your email';
                           if (!value.contains('@')) return 'Invalid email format';
                           return null;
                         },
                       ),
-                      const SizedBox(height: 12),
-                      TextFormField(
+                      SizedBox(height: AppTheme.spaceMD),
+                      
+                      // Password Field
+                      GustTextField(
                         controller: _passwordController,
+                        label: 'Password',
+                        hint: 'Enter your password',
+                        prefixIcon: Icons.lock_outline,
                         obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          prefixIcon: Icon(Icons.lock_outline, color: theme.colorScheme.primary),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10.0)),
-                          contentPadding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 10.0),
-                        ),
+                        textInputAction: TextInputAction.done,
                         validator: (value) {
                           if (value == null || value.isEmpty) return 'Please enter your password';
                           if (value.length < 6) return 'Password must be at least 6 characters';
                           return null;
                         },
                       ),
-                      const SizedBox(height: 24),
-                      _isLoading
-                          ? const CircularProgressIndicator()
-                          : ElevatedButton(
-                              onPressed: _isLoading ? null : _login,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: theme.colorScheme.primary,
-                                foregroundColor: theme.colorScheme.onPrimary,
-                                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
-                              ),
-                              child: const Text('Login'),
-                            ),
-                      const SizedBox(height: 16),
-                      TextButton(
-                        onPressed: _register,
-                        child: Text('Create Account', style: TextStyle(color: theme.colorScheme.secondary)),
+                      SizedBox(height: AppTheme.spaceLG),
+                      
+                      // Login Button
+                      GustButton(
+                        text: 'Login',
+                        onPressed: _login,
+                        isLoading: _isLoading,
+                        type: ButtonType.primary,
+                        width: double.infinity,
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+                      SizedBox(height: AppTheme.spaceMD),
+                      
+                      // Register Link
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "Don't have an account? ",
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          GestureDetector(
+                            onTap: _register,
+                            child: Text(
+                              'Sign Up',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: AppTheme.accentTeal,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ), // Row
+                    ], // Column children
+                  ), // Column
+                ), // Form
+              ), // Padding
+            ), // Card
+          ), // SingleChildScrollView
+        ), // Center
+      ), // SafeArea
+    ), // Container
+    ); // Scaffold body
   }
 }
