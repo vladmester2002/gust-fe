@@ -7,6 +7,7 @@ import 'package:gust_fe/Login.dart';
 import 'package:gust_fe/SugarLog.dart';
 import 'package:gust_fe/sugar_log_creation_dialog.dart';
 import 'package:gust_fe/main_navigation.dart';
+import 'package:gust_fe/onboarding_page.dart';
 import 'package:gust_fe/theme/app_theme.dart';
 
 void main() {
@@ -17,6 +18,7 @@ class AppRoutes {
   static const String login = '/';              // Login page is root "/"
   static const String register = '/register';
   static const String forgotPassword = '/forgot-password';
+  static const String onboarding = '/onboarding';
   static const String mainNav = '/main-nav';
 }
 
@@ -34,12 +36,13 @@ class MyApp extends StatelessWidget {
       title: 'GUST App',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      initialRoute: AppRoutes.login,        // This is "/"
+      initialRoute: AppRoutes.login, // This is "/"
       routes: {
-        AppRoutes.login: (context) => const LoginPage(),              // "/" route: LoginPage
-        AppRoutes.register: (context) => const RegisterPage(),        // "/register"
-        AppRoutes.forgotPassword: (context) => const ForgotPasswordPage(), // "/forgot-password"
-        AppRoutes.mainNav: (context) => MainNavigation(logs: mockLogs),    // "/main-nav"
+        AppRoutes.login: (context) => const LoginPage(),
+        AppRoutes.register: (context) => const RegisterPage(),
+        AppRoutes.forgotPassword: (context) => const ForgotPasswordPage(),
+        AppRoutes.onboarding: (context) => const OnboardingPage(),
+        AppRoutes.mainNav: (context) => MainNavigation(logs: mockLogs),
       },
     );
   }

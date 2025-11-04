@@ -13,10 +13,8 @@ import 'package:another_flushbar/flushbar.dart';
 // Add for file download:
 import 'dart:io' as io;
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:path_provider/path_provider.dart'; // DOnly for mobile/desktop
+import 'package:path_provider/path_provider.dart'; // Only for mobile/desktop
 import 'package:open_file/open_file.dart'; // Only for mobile/desktop
-import 'package:flutter/services.dart' show rootBundle;
-import 'dart:html' as html; // Only for web
 
 const List<String> monthOrder = [
   "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY",
@@ -164,12 +162,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     final fileName = 'sugar_log_export_${selectedYear}_${selectedMonth.toString().padLeft(2, '0')}.csv';
 
     if (kIsWeb) {
-      final blob = html.Blob([resp.bodyBytes], 'text/csv');
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute("download", fileName)
-        ..click();
-      html.Url.revokeObjectUrl(url);
+      // Web download - simplified without dart:html
+      // Note: Full web download functionality requires dart:html which can't be imported in mobile builds
+      // You can enable this in a web-specific file if needed
+      throw UnsupportedError('CSV download on web requires dart:html - use mobile app for downloads');
     } else {
       final dir = await getApplicationDocumentsDirectory();
       final file = io.File('${dir.path}/$fileName');

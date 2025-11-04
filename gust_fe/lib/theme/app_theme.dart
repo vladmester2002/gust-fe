@@ -304,14 +304,98 @@ class AppTheme {
       ),
     ),
   );
+
+  // Dark Theme
+  static ThemeData darkTheme = ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    colorScheme: ColorScheme.dark(
+      primary: primaryPurple,
+      secondary: accentTeal,
+      tertiary: accentCoral,
+      surface: Color(0xFF1E1E1E),
+      background: Color(0xFF121212),
+      error: errorRed,
+      onPrimary: Colors.white,
+      onSecondary: Colors.white,
+      onSurface: Colors.white,
+      onBackground: Colors.white,
+      onError: Colors.white,
+    ),
+    scaffoldBackgroundColor: Color(0xFF121212),
+    appBarTheme: AppBarTheme(
+      elevation: 0,
+      centerTitle: false,
+      backgroundColor: Colors.transparent,
+      foregroundColor: Colors.white,
+      titleTextStyle: TextStyle(
+        color: Colors.white,
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.15,
+      ),
+      iconTheme: IconThemeData(color: Colors.white),
+    ),
+    cardTheme: CardTheme(
+      color: Color(0xFF1E1E1E),
+      elevation: 2,
+      shadowColor: Colors.black.withOpacity(0.4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(radiusMedium),
+      ),
+      margin: EdgeInsets.symmetric(horizontal: spaceMD, vertical: spaceSM),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primaryPurple,
+        foregroundColor: Colors.white,
+        elevation: 2,
+        padding: EdgeInsets.symmetric(horizontal: spaceXL, vertical: spaceMD),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusMedium)),
+        textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Color(0xFF2A2A2A),
+      contentPadding: EdgeInsets.symmetric(horizontal: spaceMD, vertical: spaceMD),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(radiusMedium)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(radiusMedium)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(radiusMedium), borderSide: BorderSide(color: primaryPurple, width: 2)),
+      labelStyle: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w400),
+      hintStyle: TextStyle(color: Colors.white54, fontSize: 14),
+      errorStyle: TextStyle(color: errorRed, fontSize: 12),
+    ),
+    textTheme: TextTheme(
+      displayLarge: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.5),
+      headlineLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
+      headlineMedium: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+      titleLarge: TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: Colors.white),
+      bodyLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w400, color: Colors.white, height: 1.5),
+      bodyMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: Colors.white70, height: 1.4),
+      bodySmall: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: Colors.white60),
+      labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
+    ),
+    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+      backgroundColor: Color(0xFF1E1E1E),
+      selectedItemColor: primaryPurple,
+      unselectedItemColor: Colors.white54,
+      elevation: 8,
+    ),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(backgroundColor: primaryPurple, foregroundColor: Colors.white, elevation: 6),
+    dividerTheme: DividerThemeData(color: Colors.white12, thickness: 1, space: spaceMD),
+  );
   
   // Gradient Backgrounds
+  // For a clean, professional look we prefer a neutral solid background.
+  // Keep a Gradient API for backward-compatibility, but make it visually
+  // neutral by using the same color for start and end (effectively solid).
   static LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [
-      accentTeal,
-      primaryPurple,
+      backgroundGrey,
+      backgroundGrey,
     ],
   );
   

@@ -1,5 +1,11 @@
 // lib/constants.dart
 
-const String baseUrl = 'http://localhost:8080';
-// Or set this to your deployed server URL when needed
-// For web builds, use localhost instead of IP address to avoid CORS issues
+// For Android Emulator: use 10.0.2.2 to reach host PC
+// For Web: use localhost
+// For Physical Device: use your PC's local IP (e.g., 192.168.1.x)
+const String baseUrl = 'http://10.0.2.2:8081';
+
+// Google OAuth Client ID (web)
+// Get this from: https://console.cloud.google.com/
+// See GOOGLE_SIGNIN_QUICKSTART.md for setup instructions
+const String googleClientId = ''; // TODO: Add your Google Client ID here

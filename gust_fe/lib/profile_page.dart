@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'constants.dart'; // Make sure this has baseUrl
 import 'main.dart'; // For AppRoutes
+import 'services/biometric_auth_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -25,11 +26,34 @@ class _ProfilePageState extends State<ProfilePage> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _emailController;
+  
+  // Biometric
+  final BiometricAuthService _biometricService = BiometricAuthService();
+  bool _biometricAvailable = false;
+  bool _biometricEnabled = false;
+  String _biometricType = 'Biometric';
+  
+  // 🔧 DEBUG MODE: Set to true to see biometric UI on web (for testing only)
+  final bool _debugShowBiometric = true;
 
   @override
   void initState() {
     super.initState();
     _fetchProfile();
+    _checkBiometric();
+  }
+  
+  Future<void> _checkBiometric() async {
+    final isAvailable = await _biometricService.isBiometricAvailable();
+    final isEnabled = await _biometricService.isBiometricEnabled();
+    final biometrics = await _biometricService.getAvailableBiometrics();
+    final type = _biometricService.getBiometricTypeName(biometrics);
+    
+    setState(() {
+      _biometricAvailable = isAvailable || _debugShowBiometric; // Show if debug mode
+      _biometricEnabled = isEnabled;
+      _biometricType = type;
+    });
   }
 
   Future<String?> _getToken() async {
@@ -116,6 +140,10 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('jwt_token');
+    
+    // Clear biometric auth data
+    await _biometricService.clearAuthToken();
+    
     if (!mounted) return;
     Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
   }
@@ -297,10 +325,125 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                             ),
                           ),
+                        // Biometric Toggle Section
+                        if (!_editing && _biometricAvailable)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: Card(
+                              color: Colors.white.withOpacity(0.9),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 16, horizontal: 22),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _biometricType == 'Face ID' 
+                                          ? Icons.face 
+                                          : Icons.fingerprint,
+                                      color: Colors.deepPurple,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '$_biometricType Login',
+                                            style: theme.textTheme.titleMedium?.copyWith(
+                                                fontWeight: FontWeight.bold, fontSize: 16),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Quick and secure access',
+                                            style: theme.textTheme.bodySmall?.copyWith(
+                                                color: Colors.grey[600]),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Switch(
+                                      value: _biometricEnabled,
+                                      onChanged: (value) => _toggleBiometric(value),
+                                      activeColor: Colors.deepPurple,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
                 ),
     );
+  }
+
+  /// Toggle biometric authentication on/off
+  Future<void> _toggleBiometric(bool enable) async {
+    // Check if we're in debug mode on web
+    if (_debugShowBiometric && !await _biometricService.isBiometricAvailable()) {
+      // Show info message that this only works on physical devices
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ Biometric auth only works on physical devices!\n\nThis is just a preview of the UI.'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+    
+    if (enable) {
+      // User wants to enable biometric
+      final didAuthenticate = await _biometricService.authenticate(
+        reason: 'Authenticate to enable $_biometricType login',
+      );
+      
+      if (didAuthenticate) {
+        // Get current JWT token
+        final token = await _getToken();
+        if (token != null) {
+          await _biometricService.saveAuthToken(token);
+          await _biometricService.enableBiometric();
+          
+          setState(() {
+            _biometricEnabled = true;
+          });
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('$_biometricType login enabled!'),
+                backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      }
+    } else {
+      // User wants to disable biometric
+      await _biometricService.disableBiometric();
+      
+      setState(() {
+        _biometricEnabled = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$_biometricType login disabled'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 }

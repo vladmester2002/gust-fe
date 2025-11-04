@@ -72,93 +72,105 @@ class _MainNavigationState extends State<MainNavigation> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             // Home
-            MaterialButton(
-              minWidth: 40,
-              onPressed: () => _onNavTap(0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.home,
-                      color: _currentIndex == 0
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey),
-                  Text(
-                    'Home',
-                    style: TextStyle(
-                      color: _currentIndex == 0
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey,
+            Expanded(
+              child: MaterialButton(
+                minWidth: 40,
+                onPressed: () => _onNavTap(0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.home,
+                        color: _currentIndex == 0
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey),
+                    Text(
+                      'Home',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _currentIndex == 0
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             // Analytics
-            MaterialButton(
-              minWidth: 40,
-              onPressed: () => _onNavTap(1),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.bar_chart,
-                      color: _currentIndex == 1
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey),
-                  Text(
-                    'Analytics',
-                    style: TextStyle(
-                      color: _currentIndex == 1
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey,
+            Expanded(
+              child: MaterialButton(
+                minWidth: 40,
+                onPressed: () => _onNavTap(1),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.bar_chart,
+                        color: _currentIndex == 1
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey),
+                    Text(
+                      'Analytics',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _currentIndex == 1
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             // Spacer for FAB
             const SizedBox(width: 48),
             // Community
-            MaterialButton(
-              minWidth: 40,
-              onPressed: () => _onNavTap(2),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.emoji_events,
-                      color: _currentIndex == 2
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey),
-                  Text(
-                    'Community',
-                    style: TextStyle(
-                      color: _currentIndex == 2
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey,
+            Expanded(
+              child: MaterialButton(
+                minWidth: 40,
+                onPressed: () => _onNavTap(2),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.emoji_events,
+                        color: _currentIndex == 2
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey),
+                    Text(
+                      'Community',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _currentIndex == 2
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             // Profile
-            MaterialButton(
-              minWidth: 40,
-              onPressed: () => _onNavTap(3),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.person,
-                      color: _currentIndex == 3
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey),
-                  Text(
-                    'Profile',
-                    style: TextStyle(
-                      color: _currentIndex == 3
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey,
+            Expanded(
+              child: MaterialButton(
+                minWidth: 40,
+                onPressed: () => _onNavTap(3),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.person,
+                        color: _currentIndex == 3
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey),
+                    Text(
+                      'Profile',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _currentIndex == 3
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
