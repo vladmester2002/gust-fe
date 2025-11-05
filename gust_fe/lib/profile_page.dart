@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'constants.dart'; // Make sure this has baseUrl
 import 'main.dart'; // For AppRoutes
 import 'services/biometric_auth_service.dart';
+import 'utils/notification_helper.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -150,26 +151,33 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Colors.purple[50],
+      backgroundColor: const Color(0xFFF5F5F5),
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.purple[100],
-        title: const Text("My Profile", style: TextStyle(fontWeight: FontWeight.w600)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text(
+          _editing ? "Edit Profile" : "My Profile",
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 24,
+            color: Colors.white,
+          ),
+        ),
         centerTitle: false,
-        leading: null, // Removes back button!
+        leading: null,
         automaticallyImplyLeading: false,
         actions: [
-          // Only show logout if not editing
           if (!_editing)
             IconButton(
-              icon: const Icon(Icons.logout, color: Colors.deepPurple),
+              icon: const Icon(Icons.logout_rounded, color: Colors.white),
               tooltip: "Logout",
               onPressed: _logout,
             ),
           if (!_editing && !_loading)
             IconButton(
-              icon: const Icon(Icons.edit, color: Colors.deepPurple),
+              icon: const Icon(Icons.edit_rounded, color: Colors.white),
               tooltip: "Edit",
               onPressed: () {
                 setState(() => _editing = true);
@@ -182,200 +190,418 @@ class _ProfilePageState extends State<ProfilePage> {
           : _error != null
               ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
               : SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      children: [
-                        // Avatar with big initial
-                        CircleAvatar(
-                          radius: 42,
-                          backgroundColor: Colors.deepPurple,
-                          child: Text(
-                            (_fullName.isNotEmpty ? _fullName[0].toUpperCase() : "?"),
-                            style: const TextStyle(fontSize: 36, color: Colors.white),
+                  child: Column(
+                    children: [
+                      // Header with gradient and avatar
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              const Color(0xFF6A1B9A),
+                              const Color(0xFF8E24AA),
+                              const Color(0xFFAB47BC),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 24),
-                        // Editable fields (name, email)
-                        Card(
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
+                        child: SafeArea(
+                          bottom: false,
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                            padding: const EdgeInsets.fromLTRB(24, 80, 24, 40),
                             child: Column(
                               children: [
-                                TextFormField(
-                                  controller: _nameController,
-                                  enabled: _editing,
-                                  decoration: InputDecoration(
-                                    labelText: "Full Name",
-                                    prefixIcon: const Icon(Icons.person),
-                                    border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(10)),
+                                // Avatar with elevation
+                                Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.3),
+                                        blurRadius: 20,
+                                        offset: const Offset(0, 10),
+                                      ),
+                                    ],
                                   ),
-                                  style: const TextStyle(fontSize: 17),
-                                  validator: (val) => val == null || val.isEmpty
-                                      ? "Enter your name"
-                                      : null,
+                                  child: CircleAvatar(
+                                    radius: 56,
+                                    backgroundColor: Colors.white,
+                                    child: CircleAvatar(
+                                      radius: 52,
+                                      backgroundColor: const Color(0xFF4A148C),
+                                      child: Text(
+                                        (_fullName.isNotEmpty ? _fullName[0].toUpperCase() : "?"),
+                                        style: const TextStyle(
+                                          fontSize: 48,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(height: 16),
-                                TextFormField(
-                                  controller: _emailController,
-                                  enabled: _editing,
-                                  decoration: InputDecoration(
-                                    labelText: "Email",
-                                    prefixIcon: const Icon(Icons.email),
-                                    border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(10)),
+                                // Name
+                                Text(
+                                  _fullName.isNotEmpty ? _fullName : "User",
+                                  style: const TextStyle(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    letterSpacing: 0.5,
                                   ),
-                                  style: const TextStyle(fontSize: 17),
-                                  validator: (val) => val == null || val.isEmpty
-                                      ? "Enter your email"
-                                      : null,
+                                ),
+                                const SizedBox(height: 6),
+                                // Email
+                                Text(
+                                  _email,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: Colors.white.withOpacity(0.9),
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
                         ),
-                        const SizedBox(height: 18),
-                        // Action Buttons
-                        if (_editing)
-                          Row(
+                      ),
+                      
+                      // Body content
+                      Form(
+                        key: _formKey,
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.deepPurple,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12))),
-                                  onPressed: _updating ? null : _saveProfile,
-                                  icon: _updating
-                                      ? const SizedBox(
-                                          width: 20, height: 20,
-                                          child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-                                      : const Icon(Icons.save),
-                                  label: const Text("Save Changes", style: TextStyle(fontSize: 16)),
+                              // Section Header
+                              if (_editing)
+                                const Padding(
+                                  padding: EdgeInsets.only(bottom: 12),
+                                  child: Text(
+                                    "Personal Information",
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF6A1B9A),
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 18),
-                              TextButton(
-                                onPressed: _updating
-                                    ? null
-                                    : () {
-                                        setState(() {
-                                          _editing = false;
-                                          _nameController.text = _fullName;
-                                          _emailController.text = _email;
-                                        });
-                                      },
-                                style: TextButton.styleFrom(
-                                    foregroundColor: Colors.deepPurple,
-                                    textStyle: const TextStyle(fontWeight: FontWeight.bold)),
-                                child: const Text("Cancel"),
-                              ),
-                            ],
-                          ),
-                        if (!_editing)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 16),
-                            child: Card(
-                              color: Colors.white.withOpacity(0.9),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14)),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 20, horizontal: 22),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.person, color: Colors.deepPurple),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Text(
-                                            _fullName,
-                                            style: theme.textTheme.titleMedium?.copyWith(
-                                                fontWeight: FontWeight.bold, fontSize: 18),
+                              
+                              // Editable fields
+                              if (_editing)
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.05),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    children: [
+                                      TextFormField(
+                                        controller: _nameController,
+                                        enabled: _editing,
+                                        decoration: InputDecoration(
+                                          labelText: "Full Name",
+                                          prefixIcon: const Icon(Icons.person_outline_rounded, color: Color(0xFF6A1B9A)),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide(color: Colors.grey.shade300),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 14),
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.email, color: Colors.deepPurple),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Text(
-                                            _email,
-                                            style: theme.textTheme.titleMedium?.copyWith(
-                                                fontWeight: FontWeight.w500, fontSize: 17),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide(color: Colors.grey.shade300),
                                           ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: const BorderSide(color: Color(0xFF6A1B9A), width: 2),
+                                          ),
+                                          filled: true,
+                                          fillColor: Colors.grey.shade50,
                                         ),
-                                      ],
-                                    ),
-                                  ],
+                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                                        validator: (val) => val == null || val.isEmpty ? "Enter your name" : null,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      TextFormField(
+                                        controller: _emailController,
+                                        enabled: _editing,
+                                        decoration: InputDecoration(
+                                          labelText: "Email",
+                                          prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF6A1B9A)),
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide(color: Colors.grey.shade300),
+                                          ),
+                                          enabledBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: BorderSide(color: Colors.grey.shade300),
+                                          ),
+                                          focusedBorder: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                            borderSide: const BorderSide(color: Color(0xFF6A1B9A), width: 2),
+                                          ),
+                                          filled: true,
+                                          fillColor: Colors.grey.shade50,
+                                        ),
+                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                                        validator: (val) => val == null || val.isEmpty ? "Enter your email" : null,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ),
-                          ),
-                        // Biometric Toggle Section
-                        if (!_editing && _biometricAvailable)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 16),
-                            child: Card(
-                              color: Colors.white.withOpacity(0.9),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14)),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 16, horizontal: 22),
-                                child: Row(
+                              
+                              if (_editing) const SizedBox(height: 20),
+                              
+                              // Action Buttons
+                              if (_editing)
+                                Row(
                                   children: [
-                                    Icon(
-                                      _biometricType == 'Face ID' 
-                                          ? Icons.face 
-                                          : Icons.fingerprint,
-                                      color: Colors.deepPurple,
-                                    ),
-                                    const SizedBox(width: 12),
                                     Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            '$_biometricType Login',
-                                            style: theme.textTheme.titleMedium?.copyWith(
-                                                fontWeight: FontWeight.bold, fontSize: 16),
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF6A1B9A),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(vertical: 16),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
                                           ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            'Quick and secure access',
-                                            style: theme.textTheme.bodySmall?.copyWith(
-                                                color: Colors.grey[600]),
-                                          ),
-                                        ],
+                                          elevation: 2,
+                                        ),
+                                        onPressed: _updating ? null : _saveProfile,
+                                        child: _updating
+                                            ? const SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2.5,
+                                                  color: Colors.white,
+                                                ),
+                                              )
+                                            : const Row(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(Icons.check_circle_outline_rounded, size: 20),
+                                                  SizedBox(width: 8),
+                                                  Text(
+                                                    "Save Changes",
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                       ),
                                     ),
-                                    Switch(
-                                      value: _biometricEnabled,
-                                      onChanged: (value) => _toggleBiometric(value),
-                                      activeColor: Colors.deepPurple,
+                                    const SizedBox(width: 12),
+                                    OutlinedButton(
+                                      onPressed: _updating
+                                          ? null
+                                          : () {
+                                              setState(() {
+                                                _editing = false;
+                                                _nameController.text = _fullName;
+                                                _emailController.text = _email;
+                                              });
+                                            },
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFF6A1B9A),
+                                        side: const BorderSide(color: Color(0xFF6A1B9A), width: 1.5),
+                                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        "Cancel",
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
-                              ),
-                            ),
+                              
+                              // Account Settings Section (when not editing)
+                              if (!_editing) ...[
+                                const SizedBox(height: 8),
+                                const Text(
+                                  "Account Settings",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF6A1B9A),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                              
+                              // Biometric Toggle Card
+                              if (!_editing && _biometricAvailable)
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.05),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  padding: const EdgeInsets.all(20),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF6A1B9A).withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Icon(
+                                          _biometricType == 'Face ID' 
+                                              ? Icons.face_rounded 
+                                              : Icons.fingerprint_rounded,
+                                          color: const Color(0xFF6A1B9A),
+                                          size: 28,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '$_biometricType Login',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 16,
+                                                color: Color(0xFF212121),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Quick and secure access',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.grey[600],
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Switch(
+                                        value: _biometricEnabled,
+                                        onChanged: (value) => _toggleBiometric(value),
+                                        activeColor: const Color(0xFF6A1B9A),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              
+                              if (!_editing) const SizedBox(height: 16),
+                              
+                              // Daily Goal Card
+                              if (!_editing)
+                                Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        const Color(0xFF6A1B9A).withOpacity(0.1),
+                                        const Color(0xFFAB47BC).withOpacity(0.05),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: const Color(0xFF6A1B9A).withOpacity(0.2),
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  padding: const EdgeInsets.all(20),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF6A1B9A).withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: const Icon(
+                                          Icons.track_changes_rounded,
+                                          color: Color(0xFF6A1B9A),
+                                          size: 28,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Daily Sugar Goal',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 16,
+                                                color: Color(0xFF212121),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Track your sugar intake',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.grey[600],
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF6A1B9A),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          '${_dailySugarGoal}g',
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w800,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              
+                              const SizedBox(height: 32),
+                            ],
                           ),
-                      ],
-                    ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
     );
@@ -387,13 +613,9 @@ class _ProfilePageState extends State<ProfilePage> {
     if (_debugShowBiometric && !await _biometricService.isBiometricAvailable()) {
       // Show info message that this only works on physical devices
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ Biometric auth only works on physical devices!\n\nThis is just a preview of the UI.'),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 4),
-          ),
+        NotificationHelper.showInfo(
+          context,
+          'Biometric authentication only works on physical devices. This is just a UI preview.',
         );
       }
       return;
@@ -417,16 +639,21 @@ class _ProfilePageState extends State<ProfilePage> {
           });
           
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('$_biometricType login enabled!'),
-                backgroundColor: Colors.green,
-                behavior: SnackBarBehavior.floating,
-              ),
+            NotificationHelper.showSuccess(
+              context,
+              '$_biometricType login enabled',
+            );
+          }
+        } else {
+          if (mounted) {
+            NotificationHelper.showWarning(
+              context,
+              'No authentication token found. Please log in again.',
             );
           }
         }
       }
+      // If authentication fails or is cancelled, just don't show anything
     } else {
       // User wants to disable biometric
       await _biometricService.disableBiometric();
@@ -436,12 +663,9 @@ class _ProfilePageState extends State<ProfilePage> {
       });
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$_biometricType login disabled'),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ),
+        NotificationHelper.showInfo(
+          context,
+          '$_biometricType login disabled',
         );
       }
     }

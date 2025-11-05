@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'constants.dart';
-import 'package:another_flushbar/flushbar.dart';
 import 'theme/app_theme.dart';
 import 'widgets/gust_button.dart';
 import 'widgets/gust_text_field.dart';
 import 'widgets/password_strength_indicator.dart';
+import 'utils/notification_helper.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -40,23 +40,6 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
-  Future<void> _showFlushBar({
-    required String message,
-    required Color color,
-    IconData? icon,
-    Duration duration = const Duration(seconds: 2),
-  }) async {
-    await Flushbar<void>(
-      message: message,
-      duration: duration,
-      backgroundColor: color,
-      flushbarPosition: FlushbarPosition.TOP,
-      margin: const EdgeInsets.all(8),
-      borderRadius: BorderRadius.circular(8),
-      icon: icon != null ? Icon(icon, color: Colors.white) : null,
-    ).show(context);
-  }
-
   Future<void> _register() async {
     if (_formKey.currentState?.validate() ?? false) {
       setState(() => _isLoading = true);
@@ -72,53 +55,31 @@ class _RegisterPageState extends State<RegisterPage> {
         final response = await http.post(url, headers: headers, body: body);
         setState(() => _isLoading = false);
 
-        if (response.statusCode == 200) {
-          await _showFlushBar(
-            message: 'Registration successful!',
-            color: AppTheme.successGreen,
-            icon: Icons.check_circle,
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          await NotificationHelper.showSuccess(
+            context,
+            'Registration successful! You can now login.',
           );
+          if (!mounted) return;
           Navigator.of(context).pop();
-        } else if (response.statusCode == 400) {
-          final message = _parseErrorMessage(response.body) ?? 'Bad request. Please check your input.';
-          await _showFlushBar(
-            message: 'Error: $message',
-            color: AppTheme.errorRed,
-            icon: Icons.error,
-          );
         } else if (response.statusCode == 409) {
-          await _showFlushBar(
-            message: 'Account already exists.',
-            color: AppTheme.warningOrange,
-            icon: Icons.warning,
+          final message = NotificationHelper.parseErrorMessage(
+            response.body,
+            fallback: 'An account with this email already exists.',
           );
+          await NotificationHelper.showWarning(context, message);
         } else {
-          final message = _parseErrorMessage(response.body) ?? 'Unexpected error (${response.statusCode}).';
-          await _showFlushBar(
-            message: 'Error: $message',
-            color: AppTheme.errorRed,
-            icon: Icons.error,
+          final message = NotificationHelper.parseErrorMessage(
+            response.body,
+            fallback: NotificationHelper.getHttpErrorMessage(response.statusCode),
           );
+          await NotificationHelper.showError(context, message, title: 'Registration Failed');
         }
       } catch (e) {
         setState(() => _isLoading = false);
-        await _showFlushBar(
-          message: 'Network error: $e',
-          color: AppTheme.errorRed,
-          icon: Icons.error,
-        );
+        await NotificationHelper.showNetworkError(context, onRetry: _register);
       }
     }
-  }
-
-  String? _parseErrorMessage(String responseBody) {
-    try {
-      final data = jsonDecode(responseBody);
-      if (data is Map && data['message'] != null) {
-        return data['message'].toString();
-      }
-    } catch (_) {}
-    return null;
   }
 
   @override

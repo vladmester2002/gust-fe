@@ -381,73 +381,136 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     required Widget chart,
     required List<Widget> stats,
     required VoidCallback onRefresh,
-    bool showExportButton = false, // <--- add this param!
+    bool showExportButton = false,
   }) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      color: Colors.purple[50],
-      elevation: 6,
-      margin: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            const Color(0xFF6A1B9A).withOpacity(0.02),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6A1B9A).withOpacity(0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+        border: Border.all(
+          color: const Color(0xFF6A1B9A).withOpacity(0.1),
+          width: 1,
+        ),
+      ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+        padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Modern Header Row
             Row(
               children: [
-                Expanded(
-                  child: Text(title,
-                      style: TextStyle(
-                          fontSize: 20,
-                          color: Colors.deepPurple[800],
-                          fontWeight: FontWeight.w700)),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFF6A1B9A),
+                        Color(0xFF8E24AA),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF6A1B9A).withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.insights_rounded, color: Colors.white, size: 20),
                 ),
-                if (showExportButton) // <-- only show when needed!
-                  Tooltip(
-                    message: "Export This Month as CSV",
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          color: Color(0xFF2D1B47),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      Text(
+                        description,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.purple[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (showExportButton)
+                  Container(
+                    margin: const EdgeInsets.only(left: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6A1B9A).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: IconButton(
                       icon: _downloading
-                          ? SizedBox(
-                              width: 22,
-                              height: 22,
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2.3,
-                                color: Colors.deepPurple,
+                                strokeWidth: 2.5,
+                                color: Color(0xFF6A1B9A),
                               ))
-                          : const Icon(Icons.download_rounded),
-                      color: Colors.deepPurple,
-                      splashRadius: 24,
+                          : const Icon(Icons.download_rounded, size: 20),
+                      color: const Color(0xFF6A1B9A),
+                      tooltip: "Export CSV",
                       onPressed: _downloading ? null : _exportCsv,
                     ),
                   ),
-                Tooltip(
-                  message: "Refresh",
+                Container(
+                  margin: const EdgeInsets.only(left: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6A1B9A).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: IconButton(
-                    icon: const Icon(Icons.refresh),
-                    color: Colors.deepPurple,
-                    splashRadius: 24,
+                    icon: const Icon(Icons.refresh_rounded, size: 20),
+                    color: const Color(0xFF6A1B9A),
+                    tooltip: "Refresh",
                     onPressed: onRefresh,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 3),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(description,
-                  style: TextStyle(
-                      color: Colors.purple[700],
-                      fontSize: 13,
-                      fontStyle: FontStyle.italic)),
-            ),
+            
+            // Stats Cards
             if (stats.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.only(top: 10, bottom: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                padding: const EdgeInsets.only(top: 16, bottom: 8),
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
                   children: stats,
                 ),
               ),
+            
+            const SizedBox(height: 12),
             chart,
           ],
         ),
@@ -457,157 +520,209 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
 
   Widget _buildLineChart(List<AnalyticsResponse> data) {
     final sortedData = _sortDataByDate(data);
-    final spots = <FlSpot>[];
-    for (var i = 0; i < sortedData.length; i++) {
-      spots.add(FlSpot(i.toDouble(), sortedData[i].value));
-    }
-    double rawMaxY =
-        sortedData.map((e) => e.value).fold(0.0, (prev, el) => el > prev ? el : prev);
+    double rawMaxY = sortedData.map((e) => e.value).fold(0.0, (prev, el) => el > prev ? el : prev);
     double maxY = getCleanMaxY(rawMaxY);
     int yStep = getYAxisStep(maxY);
 
-    return GestureDetector(
-      child: SizedBox(
-        height: 260, // FIX: increased from 240 to 260 for line chart labels too
-        child: LineChart(
-          LineChartData(
-            minY: 0,
-            maxY: maxY,
-            gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              horizontalInterval: yStep.toDouble(),
-              getDrawingHorizontalLine: (value) => FlLine(
-                color: Colors.purple.withOpacity(0.09),
-                strokeWidth: 1,
-              ),
-            ),
-            titlesData: FlTitlesData(
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 40, // FIX: was 38, slightly increased
-                  interval: (sortedData.length <= 7)
-                      ? 1
-                      : (sortedData.length / 6).ceilToDouble(),
-                  getTitlesWidget: (value, meta) {
-                    int idx = value.toInt();
-                    if (idx < 0 || idx >= sortedData.length) return const SizedBox();
-                    if (sortedData.length > 8 && idx % ((sortedData.length / 6).ceil()) != 0) {
-                      return const SizedBox();
-                    }
-                    final dateStr = sortedData[idx].label;
-                    String shortLabel;
-                    if (dateStr != null &&
-                        dateStr.length > 7 &&
-                        dateStr.contains('-')) {
-                      try {
-                        final dt = DateTime.parse(dateStr);
-                        shortLabel = DateFormat('MMM d').format(dt);
-                      } catch (_) {
-                        shortLabel = dateStr;
-                      }
-                    } else {
-                      shortLabel = dateStr ?? '';
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Transform.rotate(
-                        angle: -0.4,
-                        child: Text(shortLabel,
-                            style: TextStyle(fontSize: 11, color: Colors.purple[800])),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 46,
-                  getTitlesWidget: (value, meta) {
-                    if (value == 0 || value == maxY || value % yStep == 0) {
-                      return Text('${value.toInt()}',
-                          style: TextStyle(fontSize: 12, color: Colors.purple[700]));
-                    }
-                    return const SizedBox();
-                  },
-                ),
-              ),
-              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            ),
-            borderData: FlBorderData(
-              show: true,
-              border: Border.all(color: Colors.purple.shade100),
-            ),
-            lineBarsData: [
-              LineChartBarData(
-                spots: spots,
-                isCurved: true,
-                barWidth: 4,
-                color: Colors.deepPurple,
-                belowBarData: BarAreaData(
-                  show: true,
-                  color: Colors.deepPurple.withOpacity(0.14),
-                ),
-                dotData: FlDotData(
-                  show: true,
-                  getDotPainter: (spot, percent, barData, index) =>
-                      FlDotCirclePainter(
-                    radius: 5,
+    return Container(
+      height: 220,
+      padding: const EdgeInsets.only(right: 8, top: 8, bottom: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: BarChart(
+        BarChartData(
+          alignment: BarChartAlignment.spaceAround,
+          maxY: maxY,
+          minY: 0,
+          barTouchData: BarTouchData(
+            enabled: true,
+            touchTooltipData: BarTouchTooltipData(
+              tooltipBgColor: const Color(0xFF6A1B9A),
+              tooltipRoundedRadius: 12,
+              tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                final resp = sortedData[group.x.toInt()];
+                String displayDate = resp.label ?? '';
+                if (displayDate.contains('-')) {
+                  try {
+                    final dt = DateTime.parse(displayDate);
+                    displayDate = DateFormat('EEE, MMM d').format(dt);
+                  } catch (_) {}
+                }
+                return BarTooltipItem(
+                  '$displayDate\n',
+                  const TextStyle(
                     color: Colors.white,
-                    strokeWidth: 3,
-                    strokeColor: Colors.deepPurple,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
                   ),
-                ),
-              ),
-            ],
-            lineTouchData: LineTouchData(
-              handleBuiltInTouches: true,
-              touchTooltipData: LineTouchTooltipData(
-                tooltipBgColor: Colors.white,
-                tooltipRoundedRadius: 10,
-                tooltipPadding: const EdgeInsets.all(8),
-                tooltipBorder: BorderSide(color: Colors.deepPurple.shade200),
-                fitInsideHorizontally: true,
-                fitInsideVertically: true,
-                getTooltipItems: (touchedSpots) {
-                  return touchedSpots.map((touchedSpot) {
-                    final idx = touchedSpot.spotIndex;
-                    final resp = sortedData[idx];
-                    return LineTooltipItem(
-                      "${resp.label ?? ''}\n",
-                      const TextStyle(
-                        color: Colors.deepPurple,
-                        fontWeight: FontWeight.bold,
+                  children: [
+                    TextSpan(
+                      text: '${resp.value.toStringAsFixed(1)}g',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
-                      children: [
-                        TextSpan(
-                          text: "${resp.value.toStringAsFixed(1)} g",
-                          style: const TextStyle(
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    );
-                  }).toList();
-                },
-              ),
-              touchCallback: (event, res) {
-                if (event is FlTapUpEvent && res != null &&
-                    res.lineBarSpots != null &&
-                    res.lineBarSpots!.isNotEmpty) {
-                  final idx = res.lineBarSpots!.first.spotIndex;
+                    ),
+                  ],
+                );
+              },
+            ),
+            touchCallback: (event, res) {
+              if (event is FlTapUpEvent && res != null && res.spot != null) {
+                final idx = res.spot!.touchedBarGroupIndex;
+                if (idx >= 0 && idx < sortedData.length) {
                   final resp = sortedData[idx];
                   _showDetailSheet(resp, sortedData);
                 }
-              },
-            ),
+              }
+            },
           ),
+          titlesData: FlTitlesData(
+            show: true,
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 36,
+                interval: sortedData.length > 15 ? (sortedData.length / 7).ceilToDouble() : 1,
+                getTitlesWidget: (value, meta) {
+                  int idx = value.toInt();
+                  if (idx < 0 || idx >= sortedData.length) return const SizedBox();
+                  
+                  // For large datasets, only show every nth label
+                  if (sortedData.length > 15) {
+                    final interval = (sortedData.length / 7).ceil();
+                    if (idx % interval != 0 && idx != sortedData.length - 1) {
+                      return const SizedBox();
+                    }
+                  }
+                  
+                  final dateStr = sortedData[idx].label;
+                  final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+                  final isToday = dateStr != null && dateStr.contains(today);
+                  
+                  String dayLabel = '';
+                  String dateLabel = '';
+                  
+                  if (dateStr != null && dateStr.contains('-')) {
+                    try {
+                      final dt = DateTime.parse(dateStr);
+                      dayLabel = DateFormat('EEE').format(dt);
+                      dateLabel = DateFormat('d').format(dt);
+                    } catch (_) {
+                      dayLabel = dateStr;
+                    }
+                  }
+                  
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          dayLabel,
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: isToday ? const Color(0xFFFF9800) : const Color(0xFF6A1B9A),
+                            fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          dateLabel,
+                          style: TextStyle(
+                            fontSize: 8,
+                            color: isToday ? const Color(0xFFFF9800) : const Color(0xFF6A1B9A).withOpacity(0.6),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 40,
+                interval: yStep.toDouble(),
+                getTitlesWidget: (value, meta) {
+                  if (value == meta.max || value == meta.min) {
+                    return const SizedBox();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Text(
+                      '${value.toInt()}g',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF6A1B9A),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          ),
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: yStep.toDouble(),
+            getDrawingHorizontalLine: (value) {
+              return FlLine(
+                color: const Color(0xFF6A1B9A).withOpacity(0.1),
+                strokeWidth: 1,
+                dashArray: [5, 5],
+              );
+            },
+          ),
+          borderData: FlBorderData(show: false),
+          barGroups: List.generate(sortedData.length, (index) {
+            final dateStr = sortedData[index].label;
+            final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+            final isToday = dateStr != null && dateStr.contains(today);
+            final value = sortedData[index].value;
+            
+            return BarChartGroupData(
+              x: index,
+              barRods: [
+                BarChartRodData(
+                  toY: value,
+                  width: sortedData.length > 20 ? 12 : (sortedData.length > 10 ? 18 : 24),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(6),
+                    bottom: Radius.circular(2),
+                  ),
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: isToday
+                        ? [
+                            const Color(0xFFFF9800),
+                            const Color(0xFFFFA726),
+                          ]
+                        : [
+                            const Color(0xFF6A1B9A),
+                            const Color(0xFF8E24AA),
+                            const Color(0xFFAB47BC),
+                          ],
+                  ),
+                  backDrawRodData: BackgroundBarChartRodData(
+                    show: true,
+                    toY: maxY,
+                    color: const Color(0xFF6A1B9A).withOpacity(0.08),
+                  ),
+                ),
+              ],
+            );
+          }),
         ),
       ),
     );
@@ -616,7 +731,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
   Widget _buildBarChart(List<AnalyticsResponse> data, String xLabel) {
     List<AnalyticsResponse> sortedData;
     if (xLabel == "Time") {
-      // Always fill all time slots, in the right order
       sortedData = _fillTimeSlots(data);
     } else if (xLabel == "Month") {
       sortedData = _sortMonthlyData(data);
@@ -630,18 +744,23 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     double maxY = getCleanMaxY(rawMaxY);
     int yStep = getYAxisStep(maxY);
 
-    return SizedBox(
-      height: 320, // FIX: Increased from 240 to 320 to give enough room for bottom labels/emojis
+    return Container(
+      height: 300,
+      padding: const EdgeInsets.only(right: 8, top: 8, bottom: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: BarChart(
         BarChartData(
           maxY: maxY,
           barTouchData: BarTouchData(
             enabled: true,
             touchTooltipData: BarTouchTooltipData(
-              tooltipBgColor: Colors.white,
-              tooltipRoundedRadius: 10,
-              tooltipPadding: const EdgeInsets.all(10),
-              tooltipBorder: BorderSide(color: Colors.deepPurple.shade200),
+              tooltipBgColor: const Color(0xFF6A1B9A),
+              tooltipRoundedRadius: 12,
+              tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              tooltipBorder: BorderSide.none,
               fitInsideHorizontally: true,
               fitInsideVertically: true,
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
@@ -651,17 +770,18 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                 return BarTooltipItem(
                   "$emoji $label\n",
                   const TextStyle(
-                    color: Colors.deepPurple,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    height: 1.5,
                   ),
                   children: [
                     TextSpan(
-                      text: "${resp.value.toStringAsFixed(1)} g",
-                      style: const TextStyle(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 13,
+                      text: "${resp.value.toStringAsFixed(1)} grams",
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.95),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
                       ),
                     ),
                   ],
@@ -686,13 +806,24 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                 barRods: [
                   BarChartRodData(
                     toY: sortedData[i].value,
-                    width: 18,
-                    borderRadius: BorderRadius.circular(6),
-                    color: Colors.deepPurpleAccent,
+                    width: 22,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(8),
+                      topRight: Radius.circular(8),
+                    ),
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        const Color(0xFF6A1B9A),
+                        const Color(0xFF8E24AA),
+                        const Color(0xFFAB47BC),
+                      ],
+                    ),
                     backDrawRodData: BackgroundBarChartRodData(
                       show: true,
                       toY: maxY,
-                      color: Colors.deepPurpleAccent.withOpacity(0.07),
+                      color: const Color(0xFF6A1B9A).withOpacity(0.08),
                     ),
                   ),
                 ],
@@ -702,31 +833,38 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                reservedSize: 62, // FIX: increased from default (was usually ~32-38) to 62 for emoji/text labels
+                reservedSize: 95,
                 interval: 1,
                 getTitlesWidget: (value, _) {
                   int idx = value.toInt();
                   if (idx < 0 || idx >= sortedData.length) return const SizedBox();
                   final slot = sortedData[idx].label ?? '';
                   final emoji = getEmotionEmoji(slot);
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(emoji, style: const TextStyle(fontSize: 24)), // FIX: emoji font up to 24 for clarity
-                      Transform.rotate(
-                        angle: -0.4,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 3.0), // FIX: Add some padding so text doesn't hit emoji
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          emoji,
+                          style: const TextStyle(fontSize: 22),
+                        ),
+                        const SizedBox(height: 1),
+                        Transform.rotate(
+                          angle: -0.2,
                           child: Text(
-                            slot,
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.purple[800],
-                                fontWeight: FontWeight.w500),
+                            slot.length > 9 ? '${slot.substring(0, 9)}...' : slot,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 9,
+                              color: Color(0xFF6A1B9A),
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   );
                 },
               ),
@@ -734,13 +872,20 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                reservedSize: 46,
+                reservedSize: 42,
+                interval: yStep.toDouble(),
                 getTitlesWidget: (value, _) {
-                  if (value == 0 || value == maxY || value % yStep == 0) {
-                    return Text('${value.toInt()}',
-                        style: TextStyle(fontSize: 12, color: Colors.purple[700]));
-                  }
-                  return const SizedBox();
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Text(
+                      '${value.toInt()}g',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF6A1B9A),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
                 },
               ),
             ),
@@ -749,39 +894,159 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
           ),
           gridData: FlGridData(
             show: true,
+            drawVerticalLine: false,
             horizontalInterval: yStep.toDouble(),
             getDrawingHorizontalLine: (value) => FlLine(
-              color: Colors.purple.withOpacity(0.10),
+              color: const Color(0xFF6A1B9A).withOpacity(0.08),
               strokeWidth: 1,
+              dashArray: [5, 5],
             ),
           ),
-          borderData: FlBorderData(show: true, border: Border.all(color: Colors.purple.shade100)),
+          borderData: FlBorderData(show: false),
         ),
       ),
     );
   }
 
   Widget _buildEmotionSummary(List<AnalyticsResponse> data) {
-    return ListView.separated(
+    // Sort by value descending to show most frequent first
+    final sortedData = List<AnalyticsResponse>.from(data)
+      ..sort((a, b) => b.value.compareTo(a.value));
+    
+    return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: data.length,
-      separatorBuilder: (context, i) =>
-          Divider(indent: 18, endIndent: 18, color: Colors.purple[100]),
+      itemCount: sortedData.length,
       itemBuilder: (context, idx) {
-        final e = data[idx];
+        final e = sortedData[idx];
         final emoji = getEmotionEmoji(e.label);
-        return ListTile(
-          leading: Text(emoji, style: const TextStyle(fontSize: 28)),
-          title: Text(
-            e.label ?? '',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+        final maxCount = sortedData.first.value;
+        final percentage = (e.value / maxCount * 100).toInt();
+        
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFF6A1B9A).withOpacity(0.1),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF6A1B9A).withOpacity(0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          trailing: Text(
-            "${e.value.toStringAsFixed(1)}x",
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => _showDetailSheet(e, data),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    // Rank badge
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: idx == 0
+                              ? [const Color(0xFFFFD700), const Color(0xFFFFA500)]
+                              : [const Color(0xFF6A1B9A), const Color(0xFF8E24AA)],
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${idx + 1}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Emoji
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6A1B9A).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        emoji,
+                        style: const TextStyle(fontSize: 28),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    // Label and progress
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            e.label ?? '',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                              color: Color(0xFF2D1B47),
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          // Progress bar
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: LinearProgressIndicator(
+                              value: percentage / 100,
+                              backgroundColor: const Color(0xFF6A1B9A).withOpacity(0.1),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                idx == 0 ? const Color(0xFFFFD700) : const Color(0xFF6A1B9A),
+                              ),
+                              minHeight: 6,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Count badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF6A1B9A).withOpacity(0.1),
+                            const Color(0xFF8E24AA).withOpacity(0.05),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFF6A1B9A).withOpacity(0.2),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Text(
+                        "${e.value.toStringAsFixed(0)}×",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                          color: Color(0xFF6A1B9A),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          onTap: () => _showDetailSheet(e, data),
         );
       },
     );
@@ -834,14 +1099,49 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
   }
 
   Widget _buildStatTile(String label, String value, {String? emoji}) {
-    return Column(
-      children: [
-        if (emoji != null) Text(emoji, style: const TextStyle(fontSize: 18)),
-        Text(value,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF6A1B9A).withOpacity(0.08),
+            const Color(0xFF8E24AA).withOpacity(0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF6A1B9A).withOpacity(0.15),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (emoji != null)
+            Text(emoji, style: const TextStyle(fontSize: 22)),
+          if (emoji != null) const SizedBox(height: 4),
+          Text(
+            value,
             style: const TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 16, color: Colors.deepPurple)),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.purple)),
-      ],
+              fontWeight: FontWeight.w800,
+              fontSize: 17,
+              color: Color(0xFF6A1B9A),
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.purple[700],
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -850,45 +1150,147 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
       "📉", "🦄", "📊", "🤷‍♂️", "☁️", "🥲"
     ]..shuffle();
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(emoji.first, style: const TextStyle(fontSize: 60)),
-          const SizedBox(height: 12),
-          Text('No data for this period.',
-              style: TextStyle(color: Colors.purple[300], fontSize: 16)),
-          TextButton.icon(
-            icon: const Icon(Icons.refresh, color: Colors.deepPurple),
-            label: const Text('Try Again'),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.deepPurple,
-              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-            ),
-            onPressed: _fetchTabData,
+      child: Container(
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white,
+              const Color(0xFF6A1B9A).withOpacity(0.05),
+            ],
           ),
-        ],
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF6A1B9A).withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6A1B9A).withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Text(emoji.first, style: const TextStyle(fontSize: 60)),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'No data for this period',
+              style: TextStyle(
+                color: Color(0xFF6A1B9A),
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Start logging to see your analytics',
+              style: TextStyle(
+                color: Colors.purple[600],
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+              label: const Text('Refresh'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6A1B9A),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 4,
+              ),
+              onPressed: _fetchTabData,
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildErrorState(String error) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text("❌", style: TextStyle(fontSize: 54)),
-          const SizedBox(height: 10),
-          Text(error, style: const TextStyle(color: Colors.red, fontSize: 16)),
-          TextButton.icon(
-            icon: const Icon(Icons.refresh, color: Colors.deepPurple),
-            label: const Text('Try Again'),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.deepPurple,
-              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-            ),
-            onPressed: _fetchTabData,
+      child: Container(
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white,
+              Colors.red.withOpacity(0.05),
+            ],
           ),
-        ],
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.red.withOpacity(0.15),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Text("❌", style: TextStyle(fontSize: 54)),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Oops! Something went wrong',
+              style: TextStyle(
+                color: Colors.red,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.red[700],
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+              label: const Text('Try Again'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 4,
+              ),
+              onPressed: _fetchTabData,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -898,13 +1300,11 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     _modalOpen = true;
 
     double? minVal, maxVal, avgVal, sumVal;
-    int rank = -1;
     if (allData.isNotEmpty) {
       minVal = allData.map((e) => e.value).reduce(min);
       maxVal = allData.map((e) => e.value).reduce(max);
       avgVal = allData.map((e) => e.value).reduce((a, b) => a + b) / allData.length;
       sumVal = allData.map((e) => e.value).reduce((a, b) => a + b);
-      rank = allData.indexWhere((e) => e.value == resp.value);
     }
 
     String? prettyDate;
@@ -1098,31 +1498,60 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
   }
 
   Widget _buildMonthSelector() {
-    final Color dropdownTextColor = Colors.deepPurple;
-    final Color dropdownBgColor = Colors.purple[50]!;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF6A1B9A).withOpacity(0.1),
+            const Color(0xFF8E24AA).withOpacity(0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF6A1B9A).withOpacity(0.15),
+          width: 1,
+        ),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          const Icon(
+            Icons.calendar_month_rounded,
+            color: Color(0xFF6A1B9A),
+            size: 22,
+          ),
+          const SizedBox(width: 12),
           Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: dropdownBgColor,
-              borderRadius: BorderRadius.circular(14),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF6A1B9A).withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
             child: DropdownButton<int>(
               value: selectedMonth,
-              borderRadius: BorderRadius.circular(10),
-              dropdownColor: dropdownBgColor,
-              style: TextStyle(color: dropdownTextColor, fontSize: 16),
+              borderRadius: BorderRadius.circular(12),
+              dropdownColor: Colors.white,
+              style: const TextStyle(
+                color: Color(0xFF6A1B9A),
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
               items: List.generate(12, (i) {
                 return DropdownMenuItem(
                   value: i + 1,
                   child: Text(
                     DateFormat.MMMM().format(DateTime(2000, i + 1)),
-                    style: TextStyle(color: dropdownTextColor),
                   ),
                 );
               }),
@@ -1130,40 +1559,46 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                 setState(() => selectedMonth = val!);
                 _fetchTabData();
               },
-              iconEnabledColor: dropdownTextColor,
-              iconDisabledColor: dropdownTextColor,
+              iconEnabledColor: const Color(0xFF6A1B9A),
               underline: const SizedBox(),
               isDense: true,
             ),
           ),
-          const SizedBox(width: 18),
+          const SizedBox(width: 12),
           Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: dropdownBgColor,
-              borderRadius: BorderRadius.circular(14),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF6A1B9A).withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: DropdownButton<int>(
               value: selectedYear,
-              borderRadius: BorderRadius.circular(10),
-              dropdownColor: dropdownBgColor,
-              style: TextStyle(color: dropdownTextColor, fontSize: 16),
+              borderRadius: BorderRadius.circular(12),
+              dropdownColor: Colors.white,
+              style: const TextStyle(
+                color: Color(0xFF6A1B9A),
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
               items: List.generate(5, (i) {
                 final year = DateTime.now().year - i;
                 return DropdownMenuItem(
                   value: year,
-                  child: Text(
-                    '$year',
-                    style: TextStyle(color: dropdownTextColor),
-                  ),
+                  child: Text('$year'),
                 );
               }),
               onChanged: (val) {
                 setState(() => selectedYear = val!);
                 _fetchTabData();
               },
-              iconEnabledColor: dropdownTextColor,
-              iconDisabledColor: dropdownTextColor,
+              iconEnabledColor: const Color(0xFF6A1B9A),
               underline: const SizedBox(),
               isDense: true,
             ),
@@ -1176,28 +1611,75 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.purple[50],
+      backgroundColor: const Color(0xFFF5F5F7),
       appBar: AppBar(
-        backgroundColor: Colors.purple[100],
-        title: const Text('Analytics'),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF6A1B9A),
+                Color(0xFF8E24AA),
+                Color(0xFFAB47BC),
+              ],
+            ),
+          ),
+        ),
+        title: const Text(
+          'Analytics',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 24,
+            color: Colors.white,
+            letterSpacing: -0.5,
+          ),
+        ),
+        centerTitle: true,
         automaticallyImplyLeading: false,
         elevation: 0,
       ),
       body: Column(
         children: [
           Container(
-            color: Colors.purple[100],
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF6A1B9A),
+                  Color(0xFF8E24AA),
+                  Color(0xFFAB47BC),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF6A1B9A).withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
             child: TabBar(
               controller: _tabController,
-              labelColor: Colors.deepPurple,
-              unselectedLabelColor: Colors.purple[300],
-              indicatorColor: Colors.deepPurple,
-              indicatorWeight: 3.2,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white.withOpacity(0.6),
+              indicatorColor: Colors.white,
+              indicatorWeight: 3,
+              indicatorSize: TabBarIndicatorSize.label,
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+                letterSpacing: 0.3,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
               tabs: const [
-                Tab(text: "Daily Trend"),
+                Tab(text: "Daily"),
                 Tab(text: "Emotions"),
-                Tab(text: "Time of Day"),
+                Tab(text: "Time"),
                 Tab(text: "Monthly"),
               ],
             ),

@@ -96,6 +96,18 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {}
   }
 
+  /// Returns a time-appropriate greeting message
+  String _getDailyGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      return "Good morning! Let's make today sugar-free ☀️";
+    } else if (hour < 17) {
+      return "Good afternoon! Stay strong 💪";
+    } else {
+      return "Good evening! You've got this 🌙";
+    }
+  }
+
   Future<void> _updateDailyGoalDialog() async {
     int? newGoal = _dailyGoal;
     final controller = TextEditingController(text: _dailyGoal.toString());
@@ -271,26 +283,81 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundGrey,
       appBar: AppBar(
-        backgroundColor: AppTheme.softLavender,
+        backgroundColor: Colors.white,
         elevation: 0,
-        title: Text(
-          'GUST Dashboard',
-          style: TextStyle(
-            color: AppTheme.primaryPurple,
-            fontWeight: FontWeight.w600,
-          ),
+        shadowColor: AppTheme.primaryPurple.withOpacity(0.1),
+        title: Row(
+          children: [
+            // Gradient GUST icon
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFF6A1B9A),
+                    Color(0xFF8E24AA),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryPurple.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Icon(
+                Icons.dashboard_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            SizedBox(width: 12),
+            // Title with gradient text effect
+            ShaderMask(
+              shaderCallback: (bounds) => LinearGradient(
+                colors: [
+                  Color(0xFF6A1B9A),
+                  Color(0xFF8E24AA),
+                ],
+              ).createShader(bounds),
+              child: Text(
+                'GUST Dashboard',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ),
+          ],
         ),
         automaticallyImplyLeading: false,
         actions: [
-          IconButton(
-            icon: Icon(Icons.refresh, color: AppTheme.primaryPurple),
-            onPressed: () {
-              _fetchLogs();
-              _loadUserStreak();
-              _loadUserProfile();
-            },
-            tooltip: "Reload logs",
-          )
+          // Stylish refresh button
+          Container(
+            margin: EdgeInsets.only(right: 12),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryPurple.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppTheme.primaryPurple.withOpacity(0.2),
+                width: 1,
+              ),
+            ),
+            child: IconButton(
+              icon: Icon(Icons.refresh_rounded, color: AppTheme.primaryPurple),
+              iconSize: 22,
+              onPressed: () {
+                _fetchLogs();
+                _loadUserStreak();
+                _loadUserProfile();
+              },
+              tooltip: "Refresh",
+            ),
+          ),
         ],
       ),
       body: _loading
@@ -299,78 +366,109 @@ class _HomePageState extends State<HomePage> {
               padding: EdgeInsets.all(AppTheme.spaceMD),
               child: Column(
                 children: [
-                  // Welcome Section with Gradient
+                  // Stunning Welcome Section with Enhanced Gradient
                   Container(
                     decoration: BoxDecoration(
-                      gradient: AppTheme.primaryGradient,
-                      borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                      boxShadow: AppTheme.shadowLevel2,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF6A1B9A), // Deep purple
+                          Color(0xFF8E24AA), // Medium purple  
+                          Color(0xFFAB47BC), // Light purple
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primaryPurple.withOpacity(0.3),
+                          blurRadius: 20,
+                          offset: Offset(0, 10),
+                        ),
+                      ],
                     ),
-                    padding: EdgeInsets.all(AppTheme.spaceLG),
-                    child: Row(
+                    padding: EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: AppTheme.shadowLevel1,
-                          ),
-                          child: CircleAvatar(
-                            radius: 28,
-                            backgroundColor: AppTheme.primaryPurple.withOpacity(0.1),
-                            child: Icon(Icons.person, color: AppTheme.primaryPurple, size: 28),
-                          ),
-                        ),
-                        SizedBox(width: AppTheme.spaceMD),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Welcome back,',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.9),
-                                  fontSize: 13,
-                                ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Hello, ${_fullName ?? 'User'} 👋',
+                                    style: const TextStyle(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _getDailyGreeting(),
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      color: Colors.white.withOpacity(0.9),
+                                      fontWeight: FontWeight.w500,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _fullName ?? 'GUST User',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                ),
+                            ),
+                            const SizedBox(width: 16),
+                            // Elevated Streak Badge
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
                               ),
-                            ],
-                          ),
-                        ),
-                        // Streak Badge
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppTheme.spaceMD,
-                            vertical: AppTheme.spaceSM,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                            boxShadow: AppTheme.shadowLevel1,
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.local_fire_department, color: AppTheme.warningOrange, size: 24),
-                              SizedBox(width: AppTheme.spaceSM),
-                              Text(
-                                '$_streak',
-                                style: TextStyle(
-                                  color: AppTheme.warningOrange,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.15),
+                                    blurRadius: 12,
+                                    offset: Offset(0, 4),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.local_fire_department,
+                                    color: AppTheme.warningOrange,
+                                    size: 28,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '$_streak',
+                                    style: TextStyle(
+                                      color: AppTheme.warningOrange,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 22,
+                                      height: 1,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'days',
+                                    style: TextStyle(
+                                      color: AppTheme.textSecondary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -453,16 +551,18 @@ class _HomePageState extends State<HomePage> {
                   ),
                   SizedBox(height: AppTheme.spaceLG),
                   
-                  // Today's Sugar Intake Card
+                  // Today's Sugar Intake Card - Fixed Overflow
                   GustCard(
                     padding: EdgeInsets.all(AppTheme.spaceLG),
                     elevation: 4,
                     child: Column(
                       children: [
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Icon with improved sizing
                             Container(
-                              padding: EdgeInsets.all(AppTheme.spaceMD),
+                              padding: EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: todaySugar > dailyGoal 
                                     ? AppTheme.errorRed.withOpacity(0.1)
@@ -472,20 +572,22 @@ class _HomePageState extends State<HomePage> {
                               child: Icon(
                                 Icons.local_drink,
                                 color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.successGreen,
-                                size: 32,
+                                size: 28,
                               ),
                             ),
                             SizedBox(width: AppTheme.spaceMD),
+                            // Expanded content section
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     "Today's Sugar Intake",
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          color: AppTheme.textPrimary,
-                                        ),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                      color: AppTheme.textPrimary,
+                                    ),
                                   ),
                                   SizedBox(height: AppTheme.spaceXS),
                                   Text(
@@ -499,8 +601,12 @@ class _HomePageState extends State<HomePage> {
                                 ],
                               ),
                             ),
+                            // Status badge with fixed sizing
                             Container(
-                              padding: EdgeInsets.all(AppTheme.spaceMD),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
                                 color: todaySugar > dailyGoal 
                                     ? AppTheme.errorRed.withOpacity(0.1)
@@ -514,19 +620,20 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ),
                               child: Column(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
                                     todaySugar > dailyGoal ? Icons.warning_amber_rounded : Icons.check_circle_rounded,
                                     color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.successGreen,
-                                    size: 28,
+                                    size: 24,
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(height: 2),
                                   Text(
                                     todaySugar > dailyGoal ? "OVER" : "GOOD",
                                     style: TextStyle(
                                       color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.successGreen,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 11,
+                                      fontSize: 10,
                                       letterSpacing: 0.5,
                                     ),
                                   ),
@@ -536,58 +643,96 @@ class _HomePageState extends State<HomePage> {
                           ],
                         ),
                         SizedBox(height: AppTheme.spaceMD),
+                        // Progress bar with gradient
                         ClipRRect(
                           borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                          child: LinearProgressIndicator(
-                            value: (todaySugar / dailyGoal).clamp(0.0, 1.0),
-                            backgroundColor: AppTheme.dividerGrey,
-                            color: todaySugar > dailyGoal
-                                ? AppTheme.errorRed
-                                : (todaySugar > dailyGoal * 0.7 ? AppTheme.warningOrange : AppTheme.successGreen),
-                            minHeight: 10,
+                          child: Stack(
+                            children: [
+                              Container(
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.dividerGrey.withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                                ),
+                              ),
+                              FractionallySizedBox(
+                                widthFactor: (todaySugar / dailyGoal).clamp(0.0, 1.0),
+                                child: Container(
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: todaySugar > dailyGoal
+                                          ? [AppTheme.errorRed, AppTheme.errorRed.withOpacity(0.8)]
+                                          : (todaySugar > dailyGoal * 0.7 
+                                              ? [AppTheme.warningOrange, AppTheme.warningOrange.withOpacity(0.8)]
+                                              : [AppTheme.successGreen, AppTheme.accentTeal]),
+                                    ),
+                                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         SizedBox(height: AppTheme.spaceMD),
+                        // Bottom info row with flexible layout
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  todaySugar > dailyGoal ? Icons.error_outline : Icons.favorite_border,
-                                  size: 18,
-                                  color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.successGreen,
-                                ),
-                                SizedBox(width: AppTheme.spaceXS),
-                                Text(
-                                  todaySugar > dailyGoal 
-                                      ? "Exceeded by ${todaySugar - dailyGoal} g" 
-                                      : "Remaining: $remaining g",
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                    color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.textPrimary,
+                            Flexible(
+                              flex: 3,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    todaySugar > dailyGoal ? Icons.error_outline : Icons.favorite_border,
+                                    size: 16,
+                                    color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.successGreen,
                                   ),
-                                ),
-                              ],
+                                  SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      todaySugar > dailyGoal 
+                                          ? "Exceeded by ${todaySugar - dailyGoal}g" 
+                                          : "Remaining: ${remaining}g",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                        color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.textPrimary,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
+                            SizedBox(width: 8),
                             Container(
                               padding: EdgeInsets.symmetric(
-                                horizontal: AppTheme.spaceSM,
-                                vertical: 4,
+                                horizontal: 10,
+                                vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: todaySugar > dailyGoal 
-                                    ? AppTheme.errorRed.withOpacity(0.1)
-                                    : AppTheme.infoBlue.withOpacity(0.1),
+                                gradient: LinearGradient(
+                                  colors: todaySugar > dailyGoal 
+                                      ? [AppTheme.errorRed.withOpacity(0.15), AppTheme.errorRed.withOpacity(0.1)]
+                                      : [AppTheme.infoBlue.withOpacity(0.15), AppTheme.infoBlue.withOpacity(0.1)],
+                                ),
                                 borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                                border: Border.all(
+                                  color: todaySugar > dailyGoal 
+                                      ? AppTheme.errorRed.withOpacity(0.3)
+                                      : AppTheme.infoBlue.withOpacity(0.3),
+                                  width: 1,
+                                ),
                               ),
                               child: Text(
                                 "${((todaySugar / dailyGoal) * 100).toStringAsFixed(0)}%",
                                 style: TextStyle(
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w800,
                                   fontSize: 13,
                                   color: todaySugar > dailyGoal ? AppTheme.errorRed : AppTheme.infoBlue,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
                             ),
@@ -598,65 +743,172 @@ class _HomePageState extends State<HomePage> {
                   ),
                   SizedBox(height: AppTheme.spaceLG),
                   
-                  // Weekly Trends Card
+                  // Weekly Trends Card - Bar Chart Design
                   GustCard(
-                    padding: EdgeInsets.all(AppTheme.spaceLG),
+                    padding: EdgeInsets.all(20),
                     elevation: 4,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Header
                         Row(
                           children: [
                             Container(
-                              padding: EdgeInsets.all(AppTheme.spaceSM),
+                              padding: EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: AppTheme.infoBlue.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                              ),
-                              child: Icon(Icons.show_chart, color: AppTheme.infoBlue, size: 24),
-                            ),
-                            SizedBox(width: AppTheme.spaceMD),
-                            Text(
-                              "Sugar Trends (7 Days)",
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: AppTheme.textPrimary,
+                                gradient: LinearGradient(
+                                  colors: [
+                                    AppTheme.primaryPurple,
+                                    AppTheme.primaryPurple.withOpacity(0.8),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppTheme.primaryPurple.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    offset: Offset(0, 2),
                                   ),
+                                ],
+                              ),
+                              child: Icon(Icons.bar_chart_rounded, color: Colors.white, size: 22),
+                            ),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Weekly Overview",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 18,
+                                      color: AppTheme.textPrimary,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                  Text(
+                                    "Last 7 days",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.textSecondary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Average badge
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    AppTheme.infoBlue.withOpacity(0.15),
+                                    AppTheme.infoBlue.withOpacity(0.1),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: AppTheme.infoBlue.withOpacity(0.3),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.show_chart, 
+                                    color: AppTheme.infoBlue, 
+                                    size: 16,
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    "${(dataPoints.fold(0, (sum, point) => sum + point.value) / dataPoints.length).toStringAsFixed(0)}g avg",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 13,
+                                      color: AppTheme.infoBlue,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
-                        SizedBox(height: AppTheme.spaceMD),
-                        SizedBox(
-                          height: 180,
-                          child: LineChart(
-                            LineChartData(
+                        SizedBox(height: 24),
+                        // Bar Chart
+                        Container(
+                          height: 240,
+                          child: BarChart(
+                            BarChartData(
+                              alignment: BarChartAlignment.spaceAround,
+                              maxY: ((maxY / 10).ceil() * 10).toDouble(),
                               minY: 0,
-                              maxY: maxY.toDouble(),
-                              gridData: FlGridData(
-                                show: true,
-                                drawVerticalLine: false,
-                                horizontalInterval: 10,
-                                getDrawingHorizontalLine: (value) {
-                                  return FlLine(
-                                    color: AppTheme.dividerGrey.withOpacity(0.3),
-                                    strokeWidth: 1,
-                                  );
-                                },
+                              barTouchData: BarTouchData(
+                                enabled: true,
+                                touchTooltipData: BarTouchTooltipData(
+                                  tooltipBgColor: AppTheme.primaryPurple,
+                                  tooltipRoundedRadius: 12,
+                                  tooltipPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                                    final date = dataPoints[group.x.toInt()].key;
+                                    final value = dataPoints[group.x.toInt()].value;
+                                    return BarTooltipItem(
+                                      '${DateFormat('EEE, MMM d').format(date)}\n',
+                                      TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                      ),
+                                      children: [
+                                        TextSpan(
+                                          text: '${value}g sugar',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
                               ),
                               titlesData: FlTitlesData(
+                                show: true,
                                 bottomTitles: AxisTitles(
                                   sideTitles: SideTitles(
                                     showTitles: true,
-                                    interval: 1,
-                                    getTitlesWidget: (value, _) {
+                                    reservedSize: 40,
+                                    getTitlesWidget: (value, meta) {
                                       int idx = value.toInt();
                                       if (idx < 0 || idx >= dataPoints.length) return const SizedBox();
                                       final date = dataPoints[idx].key;
+                                      final isToday = date.day == DateTime.now().day && 
+                                                      date.month == DateTime.now().month;
                                       return Padding(
-                                        padding: const EdgeInsets.only(top: 4),
-                                        child: Text(
-                                          DateFormat('E').format(date),
-                                          style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              DateFormat('EEE').format(date),
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: isToday ? AppTheme.primaryPurple : AppTheme.textSecondary,
+                                                fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
+                                              ),
+                                            ),
+                                            SizedBox(height: 2),
+                                            Text(
+                                              DateFormat('d').format(date),
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: isToday ? AppTheme.primaryPurple : AppTheme.textSecondary.withOpacity(0.7),
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       );
                                     },
@@ -665,96 +917,93 @@ class _HomePageState extends State<HomePage> {
                                 leftTitles: AxisTitles(
                                   sideTitles: SideTitles(
                                     showTitles: true,
-                                    reservedSize: 36,
+                                    reservedSize: 40,
+                                    interval: 20,
                                     getTitlesWidget: (value, meta) {
-                                      if (value % 10 == 0) {
-                                        return Text(
-                                          '${value.toInt()}g',
-                                          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-                                        );
+                                      if (value == meta.max || value == meta.min) {
+                                        return const SizedBox();
                                       }
-                                      return const SizedBox();
+                                      return Padding(
+                                        padding: const EdgeInsets.only(right: 8),
+                                        child: Text(
+                                          '${value.toInt()}g',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: AppTheme.textSecondary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      );
                                     },
                                   ),
                                 ),
                                 rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                                 topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                               ),
-                              borderData: FlBorderData(
+                              gridData: FlGridData(
                                 show: true,
-                                border: Border.all(color: AppTheme.dividerGrey.withOpacity(0.3)),
+                                drawVerticalLine: false,
+                                horizontalInterval: 20,
+                                getDrawingHorizontalLine: (value) {
+                                  return FlLine(
+                                    color: AppTheme.dividerGrey.withOpacity(0.2),
+                                    strokeWidth: 1,
+                                    dashArray: [5, 5],
+                                  );
+                                },
                               ),
-                              clipData: FlClipData.all(),
-                              lineBarsData: [
-                                LineChartBarData(
-                                  spots: [
-                                    for (int i = 0; i < dataPoints.length; i++)
-                                      FlSpot(i.toDouble(), dataPoints[i].value.toDouble())
+                              borderData: FlBorderData(show: false),
+                              barGroups: List.generate(dataPoints.length, (index) {
+                                final date = dataPoints[index].key;
+                                final value = dataPoints[index].value;
+                                final isToday = date.day == DateTime.now().day && 
+                                                date.month == DateTime.now().month;
+                                final isOverGoal = value > dailyGoal;
+                                
+                                return BarChartGroupData(
+                                  x: index,
+                                  barRods: [
+                                    BarChartRodData(
+                                      toY: value.toDouble(),
+                                      width: 28,
+                                      borderRadius: BorderRadius.vertical(
+                                        top: Radius.circular(8),
+                                        bottom: Radius.circular(4),
+                                      ),
+                                      gradient: LinearGradient(
+                                        begin: Alignment.bottomCenter,
+                                        end: Alignment.topCenter,
+                                        colors: isToday
+                                            ? [AppTheme.warningOrange, AppTheme.warningOrange.withOpacity(0.7)]
+                                            : isOverGoal
+                                                ? [AppTheme.errorRed.withOpacity(0.8), AppTheme.errorRed]
+                                                : [AppTheme.successGreen.withOpacity(0.8), AppTheme.accentTeal],
+                                      ),
+                                      rodStackItems: [],
+                                      backDrawRodData: BackgroundBarChartRodData(
+                                        show: true,
+                                        toY: ((maxY / 10).ceil() * 10).toDouble(),
+                                        color: AppTheme.dividerGrey.withOpacity(0.1),
+                                      ),
+                                    ),
                                   ],
-                                  isCurved: true,
-                                  barWidth: 3,
-                                  color: AppTheme.primaryPurple,
-                                  belowBarData: BarAreaData(
-                                    show: true,
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        AppTheme.primaryPurple.withOpacity(0.2),
-                                        AppTheme.primaryPurple.withOpacity(0.05),
-                                      ],
-                                    ),
-                                  ),
-                                  dotData: FlDotData(
-                                    show: true,
-                                    getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
-                                      radius: 5,
-                                      color: AppTheme.primaryPurple,
-                                      strokeWidth: 2,
-                                      strokeColor: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              lineTouchData: LineTouchData(
-                                enabled: true,
-                                handleBuiltInTouches: true,
-                                touchTooltipData: LineTouchTooltipData(
-                                  tooltipBgColor: Colors.white,
-                                  tooltipRoundedRadius: AppTheme.radiusSmall,
-                                  tooltipPadding: EdgeInsets.all(AppTheme.spaceSM),
-                                  tooltipBorder: BorderSide(color: AppTheme.primaryPurple.withOpacity(0.3), width: 1.5),
-                                  getTooltipItems: (touchedSpots) {
-                                    return touchedSpots.map((touchedSpot) {
-                                      final idx = touchedSpot.spotIndex;
-                                      final dayName = DateFormat('EEEE').format(dataPoints[idx].key);
-                                      final value = dataPoints[idx].value;
-                                      return LineTooltipItem(
-                                        "$dayName\n",
-                                        TextStyle(
-                                          color: AppTheme.primaryPurple,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15,
-                                          height: 1.3,
-                                        ),
-                                        children: [
-                                          TextSpan(
-                                            text: "$value g",
-                                            style: TextStyle(
-                                              color: AppTheme.textPrimary,
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 15,
-                                              height: 1.6,
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    }).toList();
-                                  },
-                                ),
-                              ),
+                                  showingTooltipIndicators: isToday ? [0] : [],
+                                );
+                              }),
                             ),
                           ),
+                        ),
+                        SizedBox(height: 16),
+                        // Legend
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _buildLegendItem(AppTheme.successGreen, 'Under Goal'),
+                            SizedBox(width: 16),
+                            _buildLegendItem(AppTheme.warningOrange, 'Today'),
+                            SizedBox(width: 16),
+                            _buildLegendItem(AppTheme.errorRed, 'Over Goal'),
+                          ],
                         ),
                       ],
                     ),
@@ -804,87 +1053,159 @@ class _HomePageState extends State<HomePage> {
                                       GestureDetector(
                                         onTap: () => _showRegisterModal(editLog: log),
                                         child: Container(
-                                          margin: EdgeInsets.only(bottom: AppTheme.spaceSM),
-                                          padding: EdgeInsets.all(AppTheme.spaceMD),
+                                          margin: EdgeInsets.only(bottom: AppTheme.spaceMD),
+                                          padding: EdgeInsets.all(16),
                                           decoration: BoxDecoration(
-                                            color: AppTheme.backgroundGrey,
-                                            borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                                            border: Border.all(color: AppTheme.dividerGrey.withOpacity(0.3)),
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(16),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: AppTheme.primaryPurple.withOpacity(0.08),
+                                                blurRadius: 12,
+                                                offset: Offset(0, 4),
+                                              ),
+                                            ],
+                                            border: Border.all(
+                                              color: AppTheme.dividerGrey.withOpacity(0.15),
+                                              width: 1,
+                                            ),
                                           ),
                                           child: Row(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
+                                              // Left accent indicator
                                               Container(
-                                                padding: EdgeInsets.all(6),
+                                                width: 4,
+                                                height: 60,
                                                 decoration: BoxDecoration(
-                                                  color: AppTheme.primaryPurple.withOpacity(0.1),
-                                                  shape: BoxShape.circle,
+                                                  gradient: LinearGradient(
+                                                    begin: Alignment.topCenter,
+                                                    end: Alignment.bottomCenter,
+                                                    colors: [
+                                                      AppTheme.primaryPurple,
+                                                      AppTheme.primaryPurple.withOpacity(0.5),
+                                                    ],
+                                                  ),
+                                                  borderRadius: BorderRadius.circular(2),
                                                 ),
-                                                child: Icon(Icons.circle, size: 8, color: AppTheme.primaryPurple),
                                               ),
-                                              SizedBox(width: AppTheme.spaceSM),
+                                              SizedBox(width: 12),
+                                              // Main content
                                               Expanded(
                                                 child: Column(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
-                                                    Row(
-                                                      children: [
-                                                        Text(
-                                                          log.productName,
-                                                          style: TextStyle(
-                                                            fontWeight: FontWeight.w600,
-                                                            color: AppTheme.textPrimary,
-                                                          ),
-                                                        ),
-                                                        if (log.sugarType != null && log.sugarType.trim().isNotEmpty)
-                                                          Text(
-                                                            '  (${log.sugarType})',
-                                                            style: TextStyle(
-                                                              fontSize: 13,
-                                                              color: AppTheme.textSecondary,
-                                                              fontStyle: FontStyle.italic,
-                                                            ),
-                                                          ),
-                                                      ],
+                                                    // Product name
+                                                    Text(
+                                                      log.productName,
+                                                      style: TextStyle(
+                                                        fontWeight: FontWeight.w700,
+                                                        fontSize: 16,
+                                                        color: AppTheme.textPrimary,
+                                                      ),
                                                     ),
-                                                    SizedBox(height: 4),
-                                                    Row(
+                                                    SizedBox(height: 8),
+                                                    // Time, emotion, craving - Using Wrap to prevent overflow
+                                                    Wrap(
+                                                      spacing: 10,
+                                                      runSpacing: 6,
+                                                      crossAxisAlignment: WrapCrossAlignment.center,
                                                       children: [
-                                                        Icon(Icons.access_time, size: 14, color: AppTheme.textSecondary),
-                                                        const SizedBox(width: 4),
-                                                        Text(
-                                                          '${log.hour.toString().padLeft(2, '0')}:${log.minute.toString().padLeft(2, '0')}',
-                                                          style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-                                                        ),
-                                                        const SizedBox(width: 12),
-                                                        if (log.emotion != null)
-                                                          Text(
-                                                            '${log.emotion.emoji} ${log.emotion.label}',
-                                                            style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+                                                        // Time chip
+                                                        Container(
+                                                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                          decoration: BoxDecoration(
+                                                            color: AppTheme.infoBlue.withOpacity(0.1),
+                                                            borderRadius: BorderRadius.circular(8),
                                                           ),
-                                                        if (log.wasCraving)
-                                                          Row(
+                                                          child: Row(
+                                                            mainAxisSize: MainAxisSize.min,
                                                             children: [
-                                                              const SizedBox(width: 12),
-                                                              Icon(Icons.bolt, color: AppTheme.warningOrange, size: 16),
+                                                              Icon(Icons.access_time, size: 12, color: AppTheme.infoBlue),
+                                                              const SizedBox(width: 4),
                                                               Text(
-                                                                " craving",
+                                                                '${log.hour.toString().padLeft(2, '0')}:${log.minute.toString().padLeft(2, '0')}',
                                                                 style: TextStyle(
                                                                   fontSize: 12,
-                                                                  color: AppTheme.warningOrange,
-                                                                  fontWeight: FontWeight.w500,
+                                                                  color: AppTheme.infoBlue,
+                                                                  fontWeight: FontWeight.w600,
                                                                 ),
                                                               ),
                                                             ],
                                                           ),
+                                                        ),
+                                                        // Emotion chip
+                                                        if (log.emotion != null)
+                                                          Container(
+                                                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                            decoration: BoxDecoration(
+                                                              color: AppTheme.successGreen.withOpacity(0.1),
+                                                              borderRadius: BorderRadius.circular(8),
+                                                            ),
+                                                            child: Text(
+                                                              '${log.emotion.emoji} ${log.emotion.label}',
+                                                              style: TextStyle(
+                                                                fontSize: 12,
+                                                                color: AppTheme.successGreen.withOpacity(0.8),
+                                                                fontWeight: FontWeight.w600,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        // Craving chip - Fixed overflow issue
+                                                        if (log.wasCraving)
+                                                          Container(
+                                                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                            decoration: BoxDecoration(
+                                                              color: AppTheme.warningOrange.withOpacity(0.1),
+                                                              borderRadius: BorderRadius.circular(8),
+                                                            ),
+                                                            child: Row(
+                                                              mainAxisSize: MainAxisSize.min,
+                                                              children: [
+                                                                Icon(Icons.bolt, color: AppTheme.warningOrange, size: 12),
+                                                                SizedBox(width: 4),
+                                                                Text(
+                                                                  "Craving",
+                                                                  style: TextStyle(
+                                                                    fontSize: 12,
+                                                                    color: AppTheme.warningOrange,
+                                                                    fontWeight: FontWeight.w600,
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        // Sugar type chip
+                                                        if (log.sugarType != null && log.sugarType.trim().isNotEmpty)
+                                                          Container(
+                                                            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                            decoration: BoxDecoration(
+                                                              color: AppTheme.primaryPurple.withOpacity(0.1),
+                                                              borderRadius: BorderRadius.circular(8),
+                                                            ),
+                                                            child: Text(
+                                                              log.sugarType,
+                                                              style: TextStyle(
+                                                                fontSize: 12,
+                                                                color: AppTheme.primaryPurple,
+                                                                fontWeight: FontWeight.w600,
+                                                                fontStyle: FontStyle.italic,
+                                                              ),
+                                                            ),
+                                                          ),
                                                       ],
                                                     ),
+                                                    // Context note
                                                     if (log.contextNote != null && log.contextNote.trim().isNotEmpty)
                                                       Padding(
-                                                        padding: const EdgeInsets.only(top: 4),
+                                                        padding: const EdgeInsets.only(top: 8),
                                                         child: Text(
                                                           log.contextNote,
-                                                          style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                                          style: TextStyle(
+                                                            fontSize: 13,
+                                                            color: AppTheme.textSecondary,
+                                                            height: 1.4,
+                                                          ),
                                                           maxLines: 2,
                                                           overflow: TextOverflow.ellipsis,
                                                         ),
@@ -892,22 +1213,36 @@ class _HomePageState extends State<HomePage> {
                                                   ],
                                                 ),
                                               ),
-                                              SizedBox(width: AppTheme.spaceSM),
+                                              SizedBox(width: 12),
+                                              // Sugar amount badge - inline design
                                               Container(
                                                 padding: EdgeInsets.symmetric(
-                                                  horizontal: AppTheme.spaceSM,
-                                                  vertical: 4,
+                                                  horizontal: 12,
+                                                  vertical: 8,
                                                 ),
                                                 decoration: BoxDecoration(
-                                                  color: AppTheme.primaryPurple.withOpacity(0.1),
-                                                  borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                                                  gradient: LinearGradient(
+                                                    colors: [
+                                                      AppTheme.primaryPurple,
+                                                      AppTheme.primaryPurple.withOpacity(0.8),
+                                                    ],
+                                                  ),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: AppTheme.primaryPurple.withOpacity(0.3),
+                                                      blurRadius: 8,
+                                                      offset: Offset(0, 2),
+                                                    ),
+                                                  ],
                                                 ),
                                                 child: Text(
                                                   "${log.sugarGrams}g",
                                                   style: TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 15,
-                                                    color: AppTheme.primaryPurple,
+                                                    fontWeight: FontWeight.w900,
+                                                    fontSize: 16,
+                                                    color: Colors.white,
+                                                    letterSpacing: 0.5,
                                                   ),
                                                 ),
                                               ),
@@ -976,6 +1311,41 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
+    );
+  }
+
+  // Helper method for chart legend
+  Widget _buildLegendItem(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [color, color.withOpacity(0.7)],
+            ),
+            borderRadius: BorderRadius.circular(4),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.3),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+      ],
     );
   }
 }

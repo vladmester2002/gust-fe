@@ -68,6 +68,8 @@ class _MainNavigationState extends State<MainNavigation> {
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 8,
+        height: 60,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
@@ -75,18 +77,21 @@ class _MainNavigationState extends State<MainNavigation> {
             Expanded(
               child: MaterialButton(
                 minWidth: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 onPressed: () => _onNavTap(0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.home,
+                        size: 22,
                         color: _currentIndex == 0
                             ? Theme.of(context).colorScheme.primary
                             : Colors.grey),
+                    const SizedBox(height: 2),
                     Text(
                       'Home',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         color: _currentIndex == 0
                             ? Theme.of(context).colorScheme.primary
                             : Colors.grey,
@@ -100,18 +105,21 @@ class _MainNavigationState extends State<MainNavigation> {
             Expanded(
               child: MaterialButton(
                 minWidth: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 onPressed: () => _onNavTap(1),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.bar_chart,
+                        size: 22,
                         color: _currentIndex == 1
                             ? Theme.of(context).colorScheme.primary
                             : Colors.grey),
+                    const SizedBox(height: 2),
                     Text(
                       'Analytics',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         color: _currentIndex == 1
                             ? Theme.of(context).colorScheme.primary
                             : Colors.grey,
@@ -127,18 +135,21 @@ class _MainNavigationState extends State<MainNavigation> {
             Expanded(
               child: MaterialButton(
                 minWidth: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 onPressed: () => _onNavTap(2),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.emoji_events,
+                        size: 22,
                         color: _currentIndex == 2
                             ? Theme.of(context).colorScheme.primary
                             : Colors.grey),
+                    const SizedBox(height: 2),
                     Text(
                       'Community',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         color: _currentIndex == 2
                             ? Theme.of(context).colorScheme.primary
                             : Colors.grey,
@@ -152,18 +163,21 @@ class _MainNavigationState extends State<MainNavigation> {
             Expanded(
               child: MaterialButton(
                 minWidth: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                 onPressed: () => _onNavTap(3),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.person,
+                        size: 22,
                         color: _currentIndex == 3
                             ? Theme.of(context).colorScheme.primary
                             : Colors.grey),
+                    const SizedBox(height: 2),
                     Text(
                       'Profile',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         color: _currentIndex == 3
                             ? Theme.of(context).colorScheme.primary
                             : Colors.grey,

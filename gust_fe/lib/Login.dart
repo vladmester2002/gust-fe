@@ -4,13 +4,12 @@ import 'package:http/http.dart' as http;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:another_flushbar/flushbar.dart';
 import 'theme/app_theme.dart';
 import 'widgets/gust_button.dart';
 import 'widgets/gust_text_field.dart';
 import 'widgets/auth_provider_buttons.dart';
 import 'services/biometric_auth_service.dart';
-import 'widgets/biometric_prompt_dialog.dart';
+import 'utils/notification_helper.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -55,20 +54,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
         // Check if this is the first login
         final hasCompletedOnboarding = prefs.getBool('onboarding_completed') ?? false;
-
-        Flushbar(
-          message: 'Login successful!',
-          duration: const Duration(seconds: 2),
-          backgroundColor: AppTheme.successGreen,
-          flushbarPosition: FlushbarPosition.TOP,
-          margin: const EdgeInsets.all(8),
-          borderRadius: BorderRadius.circular(8),
-          icon: const Icon(Icons.check_circle, color: Colors.white),
-        ).show(context);
-        if (!mounted) return;
         
-        // Show biometric prompt (if not already enabled)
-        await _showBiometricPrompt(token);
+        if (!mounted) return;
         
         // Navigate to onboarding if first time, otherwise go to main navigation
         if (!hasCompletedOnboarding) {
@@ -77,28 +64,15 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           Navigator.pushReplacementNamed(context, '/main-nav');
         }
       } else {
-        final message = _parseErrorMessage(response.body) ?? 'Login failed';
-        Flushbar(
-          message: 'Error: $message',
-          duration: const Duration(seconds: 2),
-          backgroundColor: AppTheme.errorRed,
-          flushbarPosition: FlushbarPosition.TOP,
-          margin: const EdgeInsets.all(8),
-          borderRadius: BorderRadius.circular(8),
-          icon: const Icon(Icons.error, color: Colors.white),
-        ).show(context);
+        final message = NotificationHelper.parseErrorMessage(
+          response.body,
+          fallback: NotificationHelper.getHttpErrorMessage(response.statusCode),
+        );
+        await NotificationHelper.showError(context, message, title: 'Login Failed');
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      Flushbar(
-        message: 'Network error: $e',
-        duration: const Duration(seconds: 2),
-        backgroundColor: AppTheme.errorRed,
-        flushbarPosition: FlushbarPosition.TOP,
-        margin: const EdgeInsets.all(8),
-        borderRadius: BorderRadius.circular(8),
-        icon: const Icon(Icons.error, color: Colors.white),
-      ).show(context);
+      await NotificationHelper.showNetworkError(context, onRetry: _login);
     }
   }
 
@@ -108,15 +82,11 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     // Check if Google Client ID is configured
     if (googleClientId.isEmpty) {
       setState(() => _isLoading = false);
-      Flushbar(
-        message: 'Google Sign-In not configured yet.\n\nPlease add your Google Client ID to constants.dart\n\nSee GOOGLE_SIGNIN_SETUP.md for instructions.',
+      await NotificationHelper.showWarning(
+        context,
+        'Google Sign-In not configured yet.\n\nPlease add your Google Client ID to constants.dart',
         duration: const Duration(seconds: 5),
-        backgroundColor: AppTheme.warningOrange,
-        flushbarPosition: FlushbarPosition.TOP,
-        margin: const EdgeInsets.all(8),
-        borderRadius: BorderRadius.circular(8),
-        icon: const Icon(Icons.warning, color: Colors.white),
-      ).show(context);
+      );
       return;
     }
     
@@ -156,14 +126,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
             if (token != null) {
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('jwt_token', token);
-              Flushbar(
-                message: 'Signed in with Google',
-                duration: const Duration(seconds: 2),
-                backgroundColor: AppTheme.successGreen,
-                flushbarPosition: FlushbarPosition.TOP,
-                margin: const EdgeInsets.all(8),
-                borderRadius: BorderRadius.circular(8),
-              ).show(context);
               if (!mounted) return;
               Navigator.pushReplacementNamed(context, '/main-nav');
               return;
@@ -180,72 +142,15 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       await prefs.setString('google_email', account.email);
       await prefs.setString('google_display_name', account.displayName ?? '');
 
-      Flushbar(
-        message: 'Signed in as ${account.email}',
-        duration: const Duration(seconds: 2),
-        backgroundColor: AppTheme.successGreen,
-        flushbarPosition: FlushbarPosition.TOP,
-        margin: const EdgeInsets.all(8),
-        borderRadius: BorderRadius.circular(8),
-      ).show(context);
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/main-nav');
     } catch (e) {
       setState(() => _isLoading = false);
-      Flushbar(
-        message: 'Google sign-in error: $e',
-        duration: const Duration(seconds: 3),
-        backgroundColor: AppTheme.errorRed,
-        flushbarPosition: FlushbarPosition.TOP,
-        margin: const EdgeInsets.all(8),
-        borderRadius: BorderRadius.circular(8),
-      ).show(context);
-    }
-  }
-
-  String? _parseErrorMessage(String responseBody) {
-    try {
-      final data = jsonDecode(responseBody);
-      if (data is Map && data['message'] != null) {
-        return data['message'].toString();
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  /// Show biometric prompt dialog after successful login
-  Future<void> _showBiometricPrompt(String token) async {
-    final isBiometricEnabled = await _biometricService.isBiometricEnabled();
-    if (isBiometricEnabled) return; // Already enabled
-
-    final isAvailable = await _biometricService.isBiometricAvailable();
-    if (!isAvailable) return; // Device doesn't support biometric
-
-    if (!mounted) return;
-    
-    final result = await BiometricPromptDialog.show(context);
-    if (result == true) {
-      // User wants to enable biometric
-      final didAuthenticate = await _biometricService.authenticate(
-        reason: 'Authenticate to enable biometric login',
+      await NotificationHelper.showError(
+        context,
+        'Failed to sign in with Google. Please try again.',
+        title: 'Google Sign-In Error',
       );
-      
-      if (didAuthenticate) {
-        // Save token and enable biometric
-        await _biometricService.saveAuthToken(token);
-        await _biometricService.enableBiometric();
-        
-        if (!mounted) return;
-        Flushbar(
-          message: 'Biometric login enabled!',
-          duration: const Duration(seconds: 2),
-          backgroundColor: AppTheme.successGreen,
-          flushbarPosition: FlushbarPosition.TOP,
-          margin: const EdgeInsets.all(8),
-          borderRadius: BorderRadius.circular(8),
-          icon: const Icon(Icons.fingerprint, color: Colors.white),
-        ).show(context);
-      }
     }
   }
 
@@ -283,17 +188,12 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       // Retrieve stored token
       final token = await _biometricService.getAuthToken();
       if (token != null) {
-        // Successfully authenticated with biometric
+        // Successfully authenticated with biometric - set flag for welcome message
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('show_welcome_back', true);
+        
         if (!mounted) return;
-        Flushbar(
-          message: 'Welcome back!',
-          duration: const Duration(seconds: 2),
-          backgroundColor: AppTheme.successGreen,
-          flushbarPosition: FlushbarPosition.TOP,
-          margin: const EdgeInsets.all(8),
-          borderRadius: BorderRadius.circular(8),
-          icon: const Icon(Icons.fingerprint, color: Colors.white),
-        ).show(context);
+        // Navigate directly to dashboard without notification
         Navigator.pushReplacementNamed(context, '/main-nav');
       }
     }
