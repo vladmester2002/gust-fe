@@ -102,18 +102,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     }
   }
 
-  Future<void> _signInWithApple() async {
-    // Placeholder for Apple Sign-In (requires sign_in_with_apple package and backend support)
-    Flushbar(
-      message: 'Apple Sign-In coming soon!',
-      duration: const Duration(seconds: 2),
-      backgroundColor: AppTheme.infoBlue,
-      flushbarPosition: FlushbarPosition.TOP,
-      margin: const EdgeInsets.all(8),
-      borderRadius: BorderRadius.circular(8),
-    ).show(context);
-  }
-
   Future<void> _signInWithGoogle() async {
     setState(() => _isLoading = true);
     
@@ -385,10 +373,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           ),
                           SizedBox(height: AppTheme.spaceXL),
 
-                          // Provider buttons (Google, Apple)
+                          // Provider buttons (Google)
                           AuthProviderButtons(
                             onGoogle: _signInWithGoogle,
-                            onApple: _signInWithApple,
                           ),
 
                           // Email Field

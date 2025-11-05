@@ -5,12 +5,10 @@ typedef VoidCallbackAsync = Future<void> Function();
 
 class AuthProviderButtons extends StatelessWidget {
   final VoidCallback? onGoogle;
-  final VoidCallback? onApple;
 
   const AuthProviderButtons({
     Key? key,
     this.onGoogle,
-    this.onApple,
   }) : super(key: key);
 
   Widget _googleLogo() {
@@ -30,24 +28,6 @@ class AuthProviderButtons extends StatelessWidget {
           color: Color(0xFF4285F4),
           fontWeight: FontWeight.w700,
         ),
-      ),
-    );
-  }
-
-  Widget _appleLogo() {
-    // Simple Apple logo representation
-    return Container(
-      width: 28,
-      height: 28,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.black,
-      ),
-      alignment: Alignment.center,
-      child: Icon(
-        Icons.apple,
-        color: Colors.white,
-        size: 20,
       ),
     );
   }
@@ -79,33 +59,8 @@ class AuthProviderButtons extends StatelessWidget {
             ),
           ),
 
-        // Apple Sign In
-        if (onApple != null) ...[
-          SizedBox(height: AppTheme.spaceSM),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppTheme.spaceSM),
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                backgroundColor: Colors.black,
-                side: BorderSide(color: Colors.black),
-                padding: EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium)),
-              ),
-              onPressed: onApple,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _appleLogo(),
-                  SizedBox(width: AppTheme.spaceSM),
-                  Text('Sign in with Apple', style: TextStyle(color: Colors.white, fontSize: 15)),
-                ],
-              ),
-            ),
-          ),
-        ],
-
         // Divider
-        if (onGoogle != null || onApple != null) ...[
+        if (onGoogle != null) ...[
           Padding(
             padding: EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
             child: Row(
