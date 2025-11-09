@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:another_flushbar/flushbar.dart'; // For notifications
 import 'constants.dart';
 import 'emotion.dart';
-import 'SugarLog.dart';
+import 'sugar_log.dart';
 import 'theme/app_theme.dart';
 import 'widgets/gust_text_field.dart';
 import 'widgets/gust_button.dart';

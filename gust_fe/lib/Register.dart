@@ -41,44 +41,48 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Future<void> _register() async {
-    if (_formKey.currentState?.validate() ?? false) {
-      setState(() => _isLoading = true);
-      final url = Uri.parse('$baseUrl/api/auth/register');
-      final headers = {'Content-Type': 'application/json'};
-      final body = jsonEncode({
-        'fullName': _usernameController.text.trim(),
-        'email': _emailController.text.trim(),
-        'password': _passwordController.text.trim(),
-      });
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
-      try {
-        final response = await http.post(url, headers: headers, body: body);
-        setState(() => _isLoading = false);
+    setState(() => _isLoading = true);
 
-        if (response.statusCode == 200 || response.statusCode == 201) {
-          await NotificationHelper.showSuccess(
-            context,
-            'Registration successful! You can now login.',
-          );
-          if (!mounted) return;
-          Navigator.of(context).pop();
-        } else if (response.statusCode == 409) {
-          final message = NotificationHelper.parseErrorMessage(
-            response.body,
-            fallback: 'An account with this email already exists.',
-          );
-          await NotificationHelper.showWarning(context, message);
-        } else {
-          final message = NotificationHelper.parseErrorMessage(
-            response.body,
-            fallback: NotificationHelper.getHttpErrorMessage(response.statusCode),
-          );
-          await NotificationHelper.showError(context, message, title: 'Registration Failed');
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        await NotificationHelper.showNetworkError(context, onRetry: _register);
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'fullName': _usernameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'password': _passwordController.text.trim(),
+        }),
+      );
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        await NotificationHelper.showSuccess(
+          context,
+          'Registration successful! You can now login.',
+        );
+        if (!mounted) return;
+        Navigator.of(context).pop();
+      } else if (response.statusCode == 409) {
+        final message = NotificationHelper.parseErrorMessage(
+          response.body,
+          fallback: 'An account with this email already exists.',
+        );
+        await NotificationHelper.showWarning(context, message);
+      } else {
+        final message = NotificationHelper.parseErrorMessage(
+          response.body,
+          fallback: NotificationHelper.getHttpErrorMessage(response.statusCode),
+        );
+        await NotificationHelper.showError(context, message, title: 'Registration Failed');
       }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      await NotificationHelper.showNetworkError(context, onRetry: _register);
     }
   }
 

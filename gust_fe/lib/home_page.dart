@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:http/http.dart' as http;
-import 'package:gust_fe/SugarLog.dart';
+import 'sugar_log.dart';
 import 'package:intl/intl.dart';
 import 'emotion.dart';
 import 'constants.dart';
@@ -62,14 +62,19 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadUserProfile() async {
     final token = await _getToken();
     if (token == null) return;
+
     try {
-      final url = Uri.parse('$baseUrl/api/users/me/profile');
-      final response = await http.get(url, headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      });
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/users/me/profile'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        if (!mounted) return;
         setState(() {
           _fullName = data['fullName'] ?? "User";
           _dailyGoal = data['dailySugarGoal'] ?? 75;
@@ -81,14 +86,19 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadUserStreak() async {
     final token = await _getToken();
     if (token == null) return;
+
     try {
-      final url = Uri.parse('$baseUrl/api/users/me/streak');
-      final response = await http.get(url, headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      });
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/users/me/streak'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        if (!mounted) return;
         setState(() {
           _streak = data['days'] ?? 0;
         });
@@ -1135,7 +1145,7 @@ class _HomePageState extends State<HomePage> {
                                                           ),
                                                         ),
                                                         // Emotion chip
-                                                        if (log.emotion != null)
+                                                        if (log.emotion != Emotion.NEUTRAL)
                                                           Container(
                                                             padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                                             decoration: BoxDecoration(
@@ -1176,7 +1186,7 @@ class _HomePageState extends State<HomePage> {
                                                             ),
                                                           ),
                                                         // Sugar type chip
-                                                        if (log.sugarType != null && log.sugarType.trim().isNotEmpty)
+                                                        if (log.sugarType.trim().isNotEmpty)
                                                           Container(
                                                             padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                                             decoration: BoxDecoration(
@@ -1196,7 +1206,7 @@ class _HomePageState extends State<HomePage> {
                                                       ],
                                                     ),
                                                     // Context note
-                                                    if (log.contextNote != null && log.contextNote.trim().isNotEmpty)
+                                                    if (log.contextNote.trim().isNotEmpty)
                                                       Padding(
                                                         padding: const EdgeInsets.only(top: 8),
                                                         child: Text(

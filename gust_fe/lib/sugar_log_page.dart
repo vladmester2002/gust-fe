@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:gust_fe/SugarLog.dart';
+import 'sugar_log.dart';
 import 'package:intl/intl.dart';
 
 enum Emotion {

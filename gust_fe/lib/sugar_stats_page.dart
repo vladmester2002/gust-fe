@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:gust_fe/SugarLog.dart';
+import 'sugar_log.dart';
 import 'package:intl/intl.dart';
 
 class SugarStatsPage extends StatelessWidget {

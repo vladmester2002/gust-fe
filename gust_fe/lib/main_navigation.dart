@@ -3,7 +3,7 @@ import 'home_page.dart';
 import 'analytics_page.dart';
 import 'profile_page.dart';
 import 'community_page.dart'; // <-- NEW!
-import 'SugarLog.dart';
+import 'sugar_log.dart';
 import 'sugar_log_creation_dialog.dart';
 
 class MainNavigation extends StatefulWidget {

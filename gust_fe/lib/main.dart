@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:gust_fe/Register.dart';
-import 'package:gust_fe/forgot_password.dart';
-import 'package:gust_fe/home_page.dart';
-import 'package:gust_fe/analytics_page.dart';
-import 'package:gust_fe/Login.dart';
-import 'package:gust_fe/SugarLog.dart';
-import 'package:gust_fe/sugar_log_creation_dialog.dart';
-import 'package:gust_fe/main_navigation.dart';
-import 'package:gust_fe/onboarding_page.dart';
-import 'package:gust_fe/theme/app_theme.dart';
+import 'register.dart';
+import 'forgot_password.dart';
+import 'login.dart';
+import 'sugar_log.dart';
+import 'main_navigation.dart';
+import 'onboarding_page.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   runApp(const MyApp());

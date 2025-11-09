@@ -1,34 +1,30 @@
+import 'package:flutter/foundation.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Service to handle biometric authentication (fingerprint, Face ID, etc.)
 class BiometricAuthService {
   final LocalAuthentication _localAuth = LocalAuthentication();
 
-  /// Check if the device supports biometric authentication
   Future<bool> isBiometricAvailable() async {
     try {
       final bool canAuthenticateWithBiometrics = await _localAuth.canCheckBiometrics;
       final bool canAuthenticate = canAuthenticateWithBiometrics || await _localAuth.isDeviceSupported();
       return canAuthenticate;
     } catch (e) {
-      print('Error checking biometric availability: $e');
+      debugPrint('Error checking biometric availability: $e');
       return false;
     }
   }
 
-  /// Get the list of available biometric types (fingerprint, face, etc.)
   Future<List<BiometricType>> getAvailableBiometrics() async {
     try {
       return await _localAuth.getAvailableBiometrics();
     } catch (e) {
-      print('Error getting available biometrics: $e');
+      debugPrint('Error getting available biometrics: $e');
       return [];
     }
   }
 
-  /// Authenticate the user using biometrics
-  /// Returns true if authentication was successful
   Future<bool> authenticate({
     String reason = 'Please authenticate to access your account',
   }) async {
@@ -41,14 +37,14 @@ class BiometricAuthService {
       final bool didAuthenticate = await _localAuth.authenticate(
         localizedReason: reason,
         options: const AuthenticationOptions(
-          stickyAuth: true, // Keep auth dialog up even if app goes to background
-          biometricOnly: false, // Allow PIN/Pattern as fallback
+          stickyAuth: true,
+          biometricOnly: false,
         ),
       );
 
       return didAuthenticate;
     } catch (e) {
-      print('Error during biometric authentication: $e');
+      debugPrint('Error during biometric authentication: $e');
       return false;
     }
   }

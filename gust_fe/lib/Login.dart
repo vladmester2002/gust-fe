@@ -34,36 +34,36 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
     setState(() => _isLoading = true);
 
-    final url = Uri.parse('$baseUrl/api/auth/login');
-    final headers = {'Content-Type': 'application/json'};
-    final body = jsonEncode({
-      'email': _usernameController.text.trim(),
-      'password': _passwordController.text.trim(),
-    });
-
     try {
-      final response = await http.post(url, headers: headers, body: body);
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': _usernameController.text.trim(),
+          'password': _passwordController.text.trim(),
+        }),
+      );
+
+      if (!mounted) return;
       setState(() => _isLoading = false);
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final token = data['token'];
 
-        // Save token securely for further API use
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('jwt_token', token);
 
-        // Check if this is the first login
         final hasCompletedOnboarding = prefs.getBool('onboarding_completed') ?? false;
-        
+
         if (!mounted) return;
-        
-        // Navigate to onboarding if first time, otherwise go to main navigation
-        if (!hasCompletedOnboarding) {
-          Navigator.pushReplacementNamed(context, '/onboarding');
-        } else {
-          Navigator.pushReplacementNamed(context, '/main-nav');
-        }
+
+        Navigator.pushReplacementNamed(
+          context,
+          hasCompletedOnboarding ? '/main-nav' : '/onboarding',
+        );
       } else {
+        if (!mounted) return;
         final message = NotificationHelper.parseErrorMessage(
           response.body,
           fallback: NotificationHelper.getHttpErrorMessage(response.statusCode),
@@ -71,17 +71,14 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         await NotificationHelper.showError(context, message, title: 'Login Failed');
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       await NotificationHelper.showNetworkError(context, onRetry: _login);
     }
   }
 
   Future<void> _signInWithGoogle() async {
-    setState(() => _isLoading = true);
-    
-    // Check if Google Client ID is configured
     if (googleClientId.isEmpty) {
-      setState(() => _isLoading = false);
       await NotificationHelper.showWarning(
         context,
         'Google Sign-In not configured yet.\n\nPlease add your Google Client ID to constants.dart',
@@ -89,62 +86,57 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       );
       return;
     }
-    
+
+    setState(() => _isLoading = true);
+
     try {
-      // Initialize GoogleSignIn with client ID
       final googleSignIn = GoogleSignIn(
         scopes: ['email', 'profile'],
         clientId: googleClientId,
       );
 
-      // Sign in
       final GoogleSignInAccount? account = await googleSignIn.signIn();
-      
+
       if (account == null) {
-        // User canceled sign-in
         setState(() => _isLoading = false);
         return;
       }
-      
-      setState(() => _isLoading = false);
 
       final auth = await account.authentication;
       final idToken = auth.idToken;
 
       if (idToken != null) {
-        // Try exchanging the idToken with your backend for a JWT (optional)
         try {
-          final url = Uri.parse('$baseUrl/api/auth/google');
-          final resp = await http.post(
-            url,
+          final response = await http.post(
+            Uri.parse('$baseUrl/api/auth/google'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'idToken': idToken}),
           );
-          if (resp.statusCode == 200) {
-            final data = jsonDecode(resp.body);
+
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
             final token = data['token'];
             if (token != null) {
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('jwt_token', token);
               if (!mounted) return;
+              setState(() => _isLoading = false);
               Navigator.pushReplacementNamed(context, '/main-nav');
               return;
             }
           }
-          // If backend exchange failed, fall through to local success handling
-        } catch (_) {
-          // ignore backend errors and continue
-        }
+        } catch (_) {}
       }
 
-      // Fallback: we have a signed-in Google account; store some info locally and continue
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('google_email', account.email);
       await prefs.setString('google_display_name', account.displayName ?? '');
 
       if (!mounted) return;
+      setState(() => _isLoading = false);
       Navigator.pushReplacementNamed(context, '/main-nav');
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       await NotificationHelper.showError(
         context,
