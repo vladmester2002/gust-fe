@@ -5,10 +5,14 @@ typedef VoidCallbackAsync = Future<void> Function();
 
 class AuthProviderButtons extends StatelessWidget {
   final VoidCallback? onGoogle;
+  final VoidCallback? onFacebook;
+  final VoidCallback? onAnonymous;
 
   const AuthProviderButtons({
     Key? key,
     this.onGoogle,
+    this.onFacebook,
+    this.onAnonymous,
   }) : super(key: key);
 
   Widget _googleLogo() {
@@ -27,6 +31,27 @@ class AuthProviderButtons extends StatelessWidget {
         style: TextStyle(
           color: Color(0xFF4285F4),
           fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _facebookLogo() {
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0xFF1877F2),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        'f',
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+          fontSize: 20,
+          fontFamily: 'serif',
         ),
       ),
     );
@@ -59,8 +84,35 @@ class AuthProviderButtons extends StatelessWidget {
             ),
           ),
 
+        // Facebook Sign In
+        if (onFacebook != null)
+          Padding(
+            padding: EdgeInsets.only(
+              left: AppTheme.spaceSM,
+              right: AppTheme.spaceSM,
+              top: onGoogle != null ? AppTheme.spaceSM : 0,
+            ),
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                backgroundColor: const Color(0xFF1877F2),
+                side: BorderSide.none,
+                padding: EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium)),
+              ),
+              onPressed: onFacebook,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _facebookLogo(),
+                  SizedBox(width: AppTheme.spaceSM),
+                  Text('Sign in with Facebook', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
+
         // Divider
-        if (onGoogle != null) ...[
+        if (onGoogle != null || onFacebook != null) ...[
           Padding(
             padding: EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
             child: Row(
@@ -82,7 +134,29 @@ class AuthProviderButtons extends StatelessWidget {
             ),
           ),
         ],
+
+        // Anonymous Sign In (after divider, below email/password)
       ],
+    );
+  }
+
+  Widget buildAnonymousButton() {
+    if (onAnonymous == null) return const SizedBox.shrink();
+    
+    return Padding(
+      padding: EdgeInsets.only(top: AppTheme.spaceMD),
+      child: TextButton.icon(
+        onPressed: onAnonymous,
+        icon: Icon(Icons.person_outline, color: AppTheme.textSecondary, size: 20),
+        label: Text(
+          'Continue as Guest',
+          style: TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
     );
   }
 }

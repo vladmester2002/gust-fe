@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'constants.dart'; // Make sure this has baseUrl
 import 'main.dart'; // For AppRoutes
 import 'services/biometric_auth_service.dart';
+import 'services/auth_helper.dart';
 import 'utils/notification_helper.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -40,6 +41,8 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
+    _nameController = TextEditingController();
+    _emailController = TextEditingController();
     _fetchProfile();
     _checkBiometric();
   }
@@ -69,6 +72,9 @@ class _ProfilePageState extends State<ProfilePage> {
     });
     try {
       final token = await _getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Missing authentication token. Please log in again.');
+      }
       final resp = await http.get(
         Uri.parse('$baseUrl/api/users/me/profile'),
         headers: {
@@ -94,12 +100,17 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
+    
     setState(() {
       _updating = true;
       _error = null;
     });
     try {
       final token = await _getToken();
+      if (token == null) {
+        throw Exception("Not authenticated. Please login again.");
+      }
+      
       final resp = await http.patch(
         Uri.parse('$baseUrl/api/users/me/profile'),
         headers: {
@@ -111,9 +122,10 @@ class _ProfilePageState extends State<ProfilePage> {
           'email': _emailController.text.trim(),
           'dailySugarGoal': _dailySugarGoal, // send as is
         }),
-      );
+      ).timeout(const Duration(seconds: 10));
+      
       if (resp.statusCode != 200) {
-        throw Exception(resp.body);
+        throw Exception(resp.body.isNotEmpty ? resp.body : "Server returned status ${resp.statusCode}");
       }
       final data = jsonDecode(resp.body);
       setState(() {
@@ -128,10 +140,23 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       }
     } catch (e) {
-      _error = "Failed to update profile: $e";
+      String errorMessage = "Failed to update profile: ";
+      if (e.toString().contains("XMLHttpRequest") || e.toString().contains("Failed host lookup")) {
+        errorMessage += "Cannot connect to server. Please check if the backend is running.";
+      } else if (e.toString().contains("timeout")) {
+        errorMessage += "Request timed out. Please try again.";
+      } else {
+        errorMessage += e.toString();
+      }
+      
+      _error = errorMessage;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_error!), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(_error!),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     }
@@ -139,8 +164,8 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('jwt_token');
+    // Clear all auth data using helper
+    await AuthHelper.clearAuth();
     
     // Clear biometric auth data
     await _biometricService.clearAuthToken();
@@ -253,9 +278,8 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                 ),
                                 const SizedBox(height: 6),
-                                // Email
                                 Text(
-                                  _email,
+                                  _email.isNotEmpty ? _email : 'Email not available',
                                   style: TextStyle(
                                     fontSize: 15,
                                     color: Colors.white.withOpacity(0.9),

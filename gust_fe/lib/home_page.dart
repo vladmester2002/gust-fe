@@ -12,6 +12,7 @@ import 'sugar_log_creation_dialog.dart';
 import 'package:another_flushbar/flushbar.dart';
 import 'theme/app_theme.dart';
 import 'widgets/gust_card.dart';
+import 'main.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.logs});
@@ -229,30 +230,20 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (context) => SugarLogCreationDialog(
         existingLog: editLog,
-        onCreated: (log) async {
-          setState(() {
-            _logs.add(log);
-          });
-          _loadUserStreak();
-          await _fetchLogs();
+        onCreated: (log) {
+          // Callback fires but we refresh after dialog closes below
         },
         onUpdated: (log) {
-          setState(() {
-            final idx = _logs.indexWhere((l) => l.id == log.id);
-            if (idx != -1) _logs[idx] = log;
-          });
-          _loadUserStreak();
+          // Callback fires but we refresh after dialog closes below
         },
         onDeleted: (log) {
-          setState(() {
-            _logs.removeWhere((l) => l.id == log.id);
-          });
-          _loadUserStreak();
+          // Callback fires but we refresh after dialog closes below
         },
       ),
     );
-    _loadUserStreak();
+    // Refresh data after dialog closes
     await _fetchLogs();
+    _loadUserStreak();
   }
 
   @override

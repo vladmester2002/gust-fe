@@ -724,7 +724,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
             if (stats.isNotEmpty)
               Container(
                 margin: const EdgeInsets.only(top: 14, bottom: 10),
-                height: 88,
+                height: 90,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: stats.length,
@@ -1245,167 +1245,181 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     double maxY = getCleanMaxY(rawMaxY);
     int yStep = getYAxisStep(maxY);
 
-    return Container(
-      height: 300,
-      padding: const EdgeInsets.only(right: 8, top: 8, bottom: 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: BarChart(
-        BarChartData(
-          maxY: maxY,
-          barTouchData: BarTouchData(
-            enabled: true,
-            touchTooltipData: BarTouchTooltipData(
-              tooltipBgColor: const Color(0xFF6A1B9A),
-              tooltipRoundedRadius: 12,
-              tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              tooltipBorder: BorderSide.none,
-              fitInsideHorizontally: true,
-              fitInsideVertically: true,
-              getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                final resp = sortedData[group.x.toInt()];
-                final label = resp.label ?? '';
-                final emoji = getEmotionEmoji(label);
-                return BarTooltipItem(
-                  "$emoji $label\n",
-                  const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: "${resp.value.toStringAsFixed(1)} grams",
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.95),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-            touchCallback: (event, res) {
-              if (event is FlTapUpEvent &&
-                  res != null &&
-                  res.spot != null &&
-                  res.spot!.touchedBarGroupIndex < sortedData.length) {
-                final idx = res.spot!.touchedBarGroupIndex;
-                final resp = sortedData[idx];
-                _showDetailSheet(resp, sortedData);
-              }
-            },
+    return Column(
+      children: [
+        // Bar Chart without bottom labels
+        Container(
+          height: 240,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(16),
           ),
-          barGroups: [
-            for (int i = 0; i < sortedData.length; i++)
-              BarChartGroupData(
-                x: i,
-                barRods: [
-                  BarChartRodData(
-                    toY: sortedData[i].value,
-                    width: 22,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(8),
-                      topRight: Radius.circular(8),
-                    ),
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        const Color(0xFF6A1B9A),
-                        const Color(0xFF8E24AA),
-                        const Color(0xFFAB47BC),
-                      ],
-                    ),
-                    backDrawRodData: BackgroundBarChartRodData(
-                      show: true,
-                      toY: maxY,
-                      color: const Color(0xFF6A1B9A).withOpacity(0.08),
-                    ),
-                  ),
-                ],
-              ),
-          ],
-          titlesData: FlTitlesData(
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 95,
-                interval: 1,
-                getTitlesWidget: (value, _) {
-                  int idx = value.toInt();
-                  if (idx < 0 || idx >= sortedData.length) return const SizedBox();
-                  final slot = sortedData[idx].label ?? '';
-                  final emoji = getEmotionEmoji(slot);
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+          child: BarChart(
+            BarChartData(
+              maxY: maxY,
+              barTouchData: BarTouchData(
+                enabled: true,
+                touchTooltipData: BarTouchTooltipData(
+                  tooltipBgColor: const Color(0xFF6A1B9A),
+                  tooltipRoundedRadius: 12,
+                  tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                    final resp = sortedData[group.x.toInt()];
+                    final label = resp.label ?? '';
+                    final emoji = getEmotionEmoji(label);
+                    return BarTooltipItem(
+                      "$emoji $label\n",
+                      const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                       children: [
-                        Text(
-                          emoji,
-                          style: const TextStyle(fontSize: 22),
-                        ),
-                        const SizedBox(height: 1),
-                        Transform.rotate(
-                          angle: -0.2,
-                          child: Text(
-                            slot.length > 9 ? '${slot.substring(0, 9)}...' : slot,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 9,
-                              color: Color(0xFF6A1B9A),
-                              fontWeight: FontWeight.w600,
-                            ),
+                        TextSpan(
+                          text: "${resp.value.toStringAsFixed(1)}g",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
                           ),
                         ),
                       ],
-                    ),
-                  );
+                    );
+                  },
+                ),
+                touchCallback: (event, res) {
+                  if (event is FlTapUpEvent &&
+                      res != null &&
+                      res.spot != null &&
+                      res.spot!.touchedBarGroupIndex < sortedData.length) {
+                    final idx = res.spot!.touchedBarGroupIndex;
+                    _showDetailSheet(sortedData[idx], sortedData);
+                  }
                 },
               ),
+              barGroups: [
+                for (int i = 0; i < sortedData.length; i++)
+                  BarChartGroupData(
+                    x: i,
+                    barRods: [
+                      BarChartRodData(
+                        toY: sortedData[i].value,
+                        width: 24,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [
+                            const Color(0xFF6A1B9A),
+                            const Color(0xFF8E24AA),
+                            const Color(0xFFAB47BC),
+                          ],
+                        ),
+                        backDrawRodData: BackgroundBarChartRodData(
+                          show: true,
+                          toY: maxY,
+                          color: const Color(0xFF6A1B9A).withOpacity(0.08),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+              titlesData: FlTitlesData(
+                bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 40,
+                    interval: yStep.toDouble(),
+                    getTitlesWidget: (value, _) {
+                      return Text(
+                        '${value.toInt()}g',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF6A1B9A),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              ),
+              gridData: FlGridData(
+                show: true,
+                drawVerticalLine: false,
+                horizontalInterval: yStep.toDouble(),
+                getDrawingHorizontalLine: (value) => FlLine(
+                  color: const Color(0xFF6A1B9A).withOpacity(0.1),
+                  strokeWidth: 1,
+                  dashArray: [4, 4],
+                ),
+              ),
+              borderData: FlBorderData(show: false),
             ),
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 42,
-                interval: yStep.toDouble(),
-                getTitlesWidget: (value, _) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Text(
-                      '${value.toInt()}g',
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Labels below chart as separate chips
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: sortedData.asMap().entries.map((entry) {
+            final data = entry.value;
+            final label = data.label ?? '';
+            final emoji = getEmotionEmoji(label);
+            return InkWell(
+              onTap: () => _showDetailSheet(data, sortedData),
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: const Color(0xFF6A1B9A).withOpacity(0.2),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6A1B9A).withOpacity(0.08),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(emoji, style: const TextStyle(fontSize: 16)),
+                    const SizedBox(width: 6),
+                    Text(
+                      label,
                       style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF6A1B9A),
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
+                        color: Color(0xFF6A1B9A),
                       ),
                     ),
-                  );
-                },
+                    const SizedBox(width: 4),
+                    Text(
+                      '${data.value.toStringAsFixed(1)}g',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF6A1B9A).withOpacity(0.7),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          ),
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            horizontalInterval: yStep.toDouble(),
-            getDrawingHorizontalLine: (value) => FlLine(
-              color: const Color(0xFF6A1B9A).withOpacity(0.08),
-              strokeWidth: 1,
-              dashArray: [5, 5],
-            ),
-          ),
-          borderData: FlBorderData(show: false),
+            );
+          }).toList(),
         ),
-      ),
+      ],
     );
   }
 
@@ -1425,7 +1439,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
         final percentage = (e.value / maxCount * 100).toInt();
         
         return Container(
-          margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 10),
+          constraints: const BoxConstraints(minHeight: 68),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
@@ -1447,13 +1462,14 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
               borderRadius: BorderRadius.circular(16),
               onTap: () => _showDetailSheet(e, data),
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     // Rank badge
                     Container(
-                      width: 32,
-                      height: 32,
+                      width: 28,
+                      height: 28,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: idx == 0
@@ -1468,40 +1484,36 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w800,
-                            fontSize: 14,
+                            fontSize: 12,
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     // Emoji
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF6A1B9A).withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        emoji,
-                        style: const TextStyle(fontSize: 28),
-                      ),
+                    Text(
+                      emoji,
+                      style: const TextStyle(fontSize: 28),
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 10),
                     // Label and progress
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
                             e.label ?? '',
                             style: const TextStyle(
                               fontWeight: FontWeight.w700,
-                              fontSize: 16,
+                              fontSize: 15,
                               color: Color(0xFF2D1B47),
                               letterSpacing: -0.2,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
                           // Progress bar
                           ClipRRect(
                             borderRadius: BorderRadius.circular(8),
@@ -1517,10 +1529,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                         ],
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     // Count badge
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
@@ -1528,17 +1540,17 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                             const Color(0xFF8E24AA).withOpacity(0.05),
                           ],
                         ),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: const Color(0xFF6A1B9A).withOpacity(0.2),
-                          width: 1.5,
+                          width: 1,
                         ),
                       ),
                       child: Text(
                         "${e.value.toStringAsFixed(0)}×",
                         style: const TextStyle(
                           fontWeight: FontWeight.w800,
-                          fontSize: 15,
+                          fontSize: 14,
                           color: Color(0xFF6A1B9A),
                         ),
                       ),
@@ -1612,7 +1624,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
 
   Widget _buildStatTile(String label, String value, {String? emoji, String? subtitle}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -1625,7 +1637,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: const Color(0xFF6A1B9A).withOpacity(0.15),
-          width: 1.5,
+          width: 1,
         ),
       ),
       child: Column(
@@ -1633,38 +1645,43 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (emoji != null) ...[
-            Text(emoji, style: const TextStyle(fontSize: 20)),
-            const SizedBox(height: 3),
+            Text(emoji, style: const TextStyle(fontSize: 18)),
+            const SizedBox(height: 2),
           ],
           Text(
             label,
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 9,
               color: Colors.purple[700],
               fontWeight: FontWeight.w600,
             ),
             textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 1),
           Text(
             value,
             style: const TextStyle(
               fontWeight: FontWeight.w800,
-              fontSize: 16,
+              fontSize: 14,
               color: Color(0xFF6A1B9A),
               letterSpacing: -0.3,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           if (subtitle != null) ...[
-            const SizedBox(height: 1),
             Text(
               subtitle,
               style: TextStyle(
-                fontSize: 9,
+                fontSize: 8,
                 color: Colors.grey[600],
                 fontWeight: FontWeight.w500,
               ),
               textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ],
@@ -3118,151 +3135,189 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     double maxY = sortedData.first.value;
     if (maxY == 0) maxY = 10;
     maxY = getCleanMaxY(maxY);
+    int yStep = getYAxisStep(maxY);
 
-    return Container(
-      height: 280,
-      padding: const EdgeInsets.only(right: 8, top: 8, bottom: 4),
-      child: BarChart(
-        BarChartData(
-          maxY: maxY,
-          barTouchData: BarTouchData(
-            enabled: true,
-            touchTooltipData: BarTouchTooltipData(
-              tooltipBgColor: const Color(0xFF6A1B9A),
-              tooltipRoundedRadius: 12,
-              tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                final resp = sortedData[group.x.toInt()];
-                final label = resp.label ?? '';
-                final emoji = getEmotionEmoji(label);
-                return BarTooltipItem(
-                  "$emoji $label\n",
-                  const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: "${resp.value.toStringAsFixed(1)}g total\n",
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.95),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
+    return Column(
+      children: [
+        // Chart
+        Container(
+          height: 220,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: BarChart(
+            BarChartData(
+              maxY: maxY,
+              barTouchData: BarTouchData(
+                enabled: true,
+                touchTooltipData: BarTouchTooltipData(
+                  tooltipBgColor: const Color(0xFF6A1B9A),
+                  tooltipRoundedRadius: 12,
+                  tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                    final resp = sortedData[group.x.toInt()];
+                    final label = resp.label ?? '';
+                    final emoji = getEmotionEmoji(label);
+                    return BarTooltipItem(
+                      "$emoji $label\n",
+                      const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
                       ),
-                    ),
-                    if (resp.detail != null && resp.detail!.isNotEmpty)
-                      TextSpan(
-                        text: resp.detail,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
-                          fontWeight: FontWeight.w400,
-                          fontSize: 11,
+                      children: [
+                        TextSpan(
+                          text: "${resp.value.toStringAsFixed(1)}g",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              barGroups: [
+                for (int i = 0; i < sortedData.length; i++)
+                  BarChartGroupData(
+                    x: i,
+                    barRods: [
+                      BarChartRodData(
+                        toY: sortedData[i].value,
+                        width: 30,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [
+                            const Color(0xFF6A1B9A),
+                            const Color(0xFF8E24AA),
+                            const Color(0xFFAB47BC),
+                          ],
+                        ),
+                        backDrawRodData: BackgroundBarChartRodData(
+                          show: true,
+                          toY: maxY,
+                          color: const Color(0xFF6A1B9A).withOpacity(0.08),
                         ),
                       ),
-                  ],
-                );
-              },
+                    ],
+                  ),
+              ],
+              titlesData: FlTitlesData(
+                bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 40,
+                    interval: yStep.toDouble(),
+                    getTitlesWidget: (value, _) {
+                      return Text(
+                        '${value.toInt()}g',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF6A1B9A),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              ),
+              gridData: FlGridData(
+                show: true,
+                drawVerticalLine: false,
+                horizontalInterval: yStep.toDouble(),
+                getDrawingHorizontalLine: (value) => FlLine(
+                  color: const Color(0xFF6A1B9A).withOpacity(0.1),
+                  strokeWidth: 1,
+                  dashArray: [4, 4],
+                ),
+              ),
+              borderData: FlBorderData(show: false),
             ),
           ),
-          barGroups: [
-            for (int i = 0; i < sortedData.length; i++)
-              BarChartGroupData(
-                x: i,
-                barRods: [
-                  BarChartRodData(
-                    toY: sortedData[i].value,
-                    width: 28,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(8),
-                      topRight: Radius.circular(8),
+        ),
+        const SizedBox(height: 12),
+        // Labels as interactive chips
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: sortedData.asMap().entries.map((entry) {
+            final data = entry.value;
+            final label = data.label ?? '';
+            final emoji = getEmotionEmoji(label);
+            final rank = entry.key + 1;
+            
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: rank == 1 
+                      ? const Color(0xFFFFD700)
+                      : rank == 2 
+                          ? const Color(0xFFC0C0C0)
+                          : rank == 3
+                              ? const Color(0xFFCD7F32)
+                              : const Color(0xFF6A1B9A).withOpacity(0.2),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6A1B9A).withOpacity(0.08),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (rank <= 3) ...[
+                    Text(
+                      rank == 1 ? '🥇' : rank == 2 ? '🥈' : '🥉',
+                      style: const TextStyle(fontSize: 14),
                     ),
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF6A1B9A).withOpacity(0.7),
-                        const Color(0xFF8E24AA),
-                      ],
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
+                    const SizedBox(width: 4),
+                  ],
+                  Text(emoji, style: const TextStyle(fontSize: 16)),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF6A1B9A),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${data.value.toStringAsFixed(1)}g',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF6A1B9A).withOpacity(0.7),
                     ),
                   ),
                 ],
               ),
-          ],
-          titlesData: FlTitlesData(
-            show: true,
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 50,
-                getTitlesWidget: (value, meta) {
-                  if (value.toInt() >= 0 && value.toInt() < sortedData.length) {
-                    final resp = sortedData[value.toInt()];
-                    final emoji = getEmotionEmoji(resp.label);
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Column(
-                        children: [
-                          Text(
-                            emoji,
-                            style: const TextStyle(fontSize: 20),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            resp.label ?? '',
-                            style: const TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF2D1B47),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                  return const SizedBox();
-                },
-              ),
-            ),
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 40,
-                getTitlesWidget: (value, meta) {
-                  return Text(
-                    '${value.toInt()}g',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey,
-                    ),
-                  );
-                },
-              ),
-            ),
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          ),
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            horizontalInterval: maxY / 5,
-            getDrawingHorizontalLine: (value) {
-              return FlLine(
-                color: Colors.grey.withOpacity(0.2),
-                strokeWidth: 1,
-              );
-            },
-          ),
-          borderData: FlBorderData(show: false),
+            );
+          }).toList(),
         ),
-      ),
+      ],
     );
   }
-  
+
+
   Widget _buildDailyTrendCard() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),

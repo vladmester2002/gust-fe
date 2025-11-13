@@ -35,11 +35,12 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     setState(() => _isLoading = true);
 
     try {
+      final email = _usernameController.text.trim();
       final response = await http.post(
         Uri.parse('$baseUrl/api/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'email': _usernameController.text.trim(),
+          'email': email,
           'password': _passwordController.text.trim(),
         }),
       );
@@ -53,6 +54,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('jwt_token', token);
+        await _biometricService.saveUserEmail(email);
+        await _biometricService.saveAuthToken(token);
 
         final hasCompletedOnboarding = prefs.getBool('onboarding_completed') ?? false;
 
@@ -144,6 +147,14 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         title: 'Google Sign-In Error',
       );
     }
+  }
+
+  Future<void> _signInWithFacebook() async {
+    await NotificationHelper.showWarning(
+      context,
+      'Facebook Sign-In coming soon!\n\nThis feature will be available in the next update.',
+      duration: const Duration(seconds: 3),
+    );
   }
 
   void _register() => Navigator.pushNamed(context, '/register');
@@ -265,10 +276,32 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           ),
                           SizedBox(height: AppTheme.spaceXL),
 
-                          // Provider buttons (Google)
+                          // Provider buttons (Google & Facebook)
                           AuthProviderButtons(
                             onGoogle: _signInWithGoogle,
+                            onFacebook: _signInWithFacebook,
                           ),
+
+                          // Divider
+                          SizedBox(height: AppTheme.spaceMD),
+                          Row(
+                            children: [
+                              Expanded(child: Divider(color: Colors.grey.shade300)),
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: AppTheme.spaceMD),
+                                child: Text(
+                                  'OR',
+                                  style: TextStyle(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              Expanded(child: Divider(color: Colors.grey.shade300)),
+                            ],
+                          ),
+                          SizedBox(height: AppTheme.spaceMD),
 
                           // Email Field
                           // use a lightweight regex for better validation
@@ -347,7 +380,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                 ),
                               ),
                             ],
-                          ), // Row
+                          ),
                         ], // Column children
                       ), // Column
                     ), // Form

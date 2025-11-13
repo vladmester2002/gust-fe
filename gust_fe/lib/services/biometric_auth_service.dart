@@ -52,19 +52,51 @@ class BiometricAuthService {
   /// Check if the user has enabled biometric login
   Future<bool> isBiometricEnabled() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('biometric_enabled') ?? false;
+    final email = prefs.getString('user_email');
+    if (email == null) return false;
+    return prefs.getBool('biometric_enabled_$email') ?? false;
   }
 
   /// Enable biometric login for the current user
   Future<void> enableBiometric() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('biometric_enabled', true);
+    final email = prefs.getString('user_email');
+    if (email != null) {
+      await prefs.setBool('biometric_enabled_$email', true);
+      await prefs.setBool('biometric_prompt_shown_$email', true);
+    }
   }
 
   /// Disable biometric login
   Future<void> disableBiometric() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('biometric_enabled', false);
+    final email = prefs.getString('user_email');
+    if (email != null) {
+      await prefs.setBool('biometric_enabled_$email', false);
+    }
+  }
+
+  /// Check if biometric prompt was already shown for this account
+  Future<bool> wasBiometricPromptShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    final email = prefs.getString('user_email');
+    if (email == null) return false;
+    return prefs.getBool('biometric_prompt_shown_$email') ?? false;
+  }
+
+  /// Mark that biometric prompt was shown (when user skips)
+  Future<void> markBiometricPromptShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    final email = prefs.getString('user_email');
+    if (email != null) {
+      await prefs.setBool('biometric_prompt_shown_$email', true);
+    }
+  }
+
+  /// Save user email for account-specific biometric settings
+  Future<void> saveUserEmail(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_email', email);
   }
 
   /// Get a user-friendly name for the biometric type

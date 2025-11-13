@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'home_page.dart';
 import 'analytics_page.dart';
 import 'profile_page.dart';
-import 'community_page.dart'; // <-- NEW!
+import 'community_page.dart';
 import 'sugar_log.dart';
 import 'sugar_log_creation_dialog.dart';
+import 'services/biometric_auth_service.dart';
+import 'widgets/biometric_setup_modal.dart';
+import 'utils/notification_helper.dart';
 
 class MainNavigation extends StatefulWidget {
   final List<SugarLog> logs;
@@ -17,11 +20,70 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
   late List<SugarLog> _logs;
+  final BiometricAuthService _biometricService = BiometricAuthService();
+  int _profilePageKey = 0;
 
   @override
   void initState() {
     super.initState();
     _logs = List.from(widget.logs);
+    _checkAndShowBiometricPrompt();
+  }
+
+  Future<void> _checkAndShowBiometricPrompt() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    final isAvailable = await _biometricService.isBiometricAvailable();
+    if (!isAvailable) return;
+
+    final wasPromptShown = await _biometricService.wasBiometricPromptShown();
+    if (wasPromptShown) return;
+
+    final biometrics = await _biometricService.getAvailableBiometrics();
+    final biometricType = _biometricService.getBiometricTypeName(biometrics);
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => BiometricSetupModal(
+        biometricType: biometricType,
+        onEnable: () async {
+          Navigator.of(context).pop();
+          await _enableBiometric();
+        },
+        onSkip: () async {
+          Navigator.of(context).pop();
+          await _biometricService.markBiometricPromptShown();
+        },
+      ),
+    );
+  }
+
+  Future<void> _enableBiometric() async {
+    final authenticated = await _biometricService.authenticate(
+      reason: 'Authenticate to enable biometric login',
+    );
+
+    if (authenticated) {
+      await _biometricService.enableBiometric();
+      setState(() {
+        _profilePageKey++;
+      });
+      if (!mounted) return;
+      await NotificationHelper.showSuccess(
+        context,
+        'Biometric authentication enabled successfully!',
+      );
+    } else {
+      await _biometricService.markBiometricPromptShown();
+      if (!mounted) return;
+      await NotificationHelper.showWarning(
+        context,
+        'Biometric authentication failed. You can enable it later from your profile.',
+      );
+    }
   }
 
   void _showRegisterModal() {
@@ -49,8 +111,8 @@ class _MainNavigationState extends State<MainNavigation> {
     final pages = [
       HomePage(logs: _logs),
       AnalyticsPage(logs: _logs),
-      CommunityPage(), // <-- Add Community Page
-      ProfilePage(),
+      CommunityPage(),
+      ProfilePage(key: ValueKey(_profilePageKey)),
     ];
 
     return Scaffold(

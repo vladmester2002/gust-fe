@@ -128,8 +128,11 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
       
       if (response.statusCode == 200 || response.statusCode == 201) {
         final log = SugarLog.fromJson(jsonDecode(response.body));
-        widget.onCreated(log);
-        Navigator.pop(context);
+        if (mounted) {
+          Navigator.pop(context);
+          // Call callback after dialog is closed
+          widget.onCreated(log);
+        }
         await _showFlushBar(
           message: 'Sugar log added!',
           color: Colors.green,
@@ -188,8 +191,10 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
       
       if (response.statusCode == 200) {
         final log = SugarLog.fromJson(jsonDecode(response.body));
-        widget.onUpdated?.call(log);
-        Navigator.pop(context);
+        if (mounted) {
+          Navigator.pop(context);
+          widget.onUpdated?.call(log);
+        }
         await _showFlushBar(
           message: 'Sugar log updated!',
           color: Colors.green,
@@ -245,8 +250,10 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
       if (!mounted) return;
       
       if (response.statusCode == 204) {
-        widget.onDeleted?.call(widget.existingLog!);
-        Navigator.pop(context);
+        if (mounted) {
+          Navigator.pop(context);
+          widget.onDeleted?.call(widget.existingLog!);
+        }
         await _showFlushBar(
           message: 'Sugar log deleted!',
           color: Colors.green,
