@@ -136,6 +136,7 @@ class AuthProviderButtons extends StatelessWidget {
         ],
 
         // Anonymous Sign In (after divider, below email/password)
+        buildAnonymousButton(),
       ],
     );
   }

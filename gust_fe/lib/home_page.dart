@@ -3,16 +3,20 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:http/http.dart' as http;
-import 'sugar_log.dart';
 import 'package:intl/intl.dart';
 import 'emotion.dart';
 import 'constants.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'sugar_log_creation_dialog.dart';
 import 'package:another_flushbar/flushbar.dart';
 import 'theme/app_theme.dart';
 import 'widgets/gust_card.dart';
 import 'main.dart';
+import 'sugar_log.dart';
+import 'data/models/local_sugar_log.dart';
+import 'data/models/local_user.dart';
+import 'repositories/auth_repository.dart';
+import 'repositories/sugar_log_repository.dart';
+import 'services/auth_helper.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.logs});
@@ -28,20 +32,36 @@ class _HomePageState extends State<HomePage> {
   String? _fullName;
   int _dailyGoal = 75;
   int _streak = 0;
+  bool _isGuestMode = false;
+  final AuthRepository _authRepository = AuthRepository();
+  final SugarLogRepository _logRepository = SugarLogRepository();
+  LocalUser? _localUser;
+  int? _highlightedBarIndex;
 
   @override
   void initState() {
     super.initState();
     _logs = List.from(widget.logs);
-    _loadUserProfile();
-    _loadUserStreak();
-    _fetchLogs();
+    _bootstrap();
   }
 
-  Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token');
+  Future<void> _bootstrap() async {
+    final isGuest = await AuthHelper.isGuestSession();
+    if (!mounted) return;
+    setState(() => _isGuestMode = isGuest);
+    await _loadUserProfile();
+    await _loadUserStreak();
+    await _fetchLogs();
   }
+
+  Future<LocalUser?> _ensureLocalUser() async {
+    if (_localUser != null) return _localUser;
+    final user = await _authRepository.getActiveUser();
+    _localUser = user;
+    return user;
+  }
+
+  Future<String?> _getToken() => AuthHelper.getNetworkToken();
 
   Future<void> _showFlushBar({
     required String message,
@@ -61,6 +81,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadUserProfile() async {
+    if (_isGuestMode) {
+      final user = await _ensureLocalUser();
+      if (!mounted) return;
+      setState(() {
+        _fullName = user?.fullName ?? 'Guest Explorer';
+        _dailyGoal = user?.dailySugarGoal ?? _dailyGoal;
+      });
+      return;
+    }
     final token = await _getToken();
     if (token == null) return;
 
@@ -85,6 +114,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadUserStreak() async {
+    if (_isGuestMode) {
+      await _computeLocalStreak();
+      return;
+    }
     final token = await _getToken();
     if (token == null) return;
 
@@ -119,6 +152,62 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _fetchLocalLogs() async {
+    final user = await _ensureLocalUser();
+    if (user?.id == null) return;
+    final entries = await _logRepository.fetchLogs(userId: user!.id!);
+    if (!mounted) return;
+    setState(() {
+      _logs = entries.map(_mapLocalLog).toList();
+    });
+  }
+
+  Future<void> _computeLocalStreak() async {
+    final user = await _ensureLocalUser();
+    if (user?.id == null) return;
+    final entries = await _logRepository.fetchLogs(userId: user!.id!);
+    final streak = _calculateStreakFromLogs(entries);
+    if (!mounted) return;
+    setState(() => _streak = streak);
+  }
+
+  int _calculateStreakFromLogs(List<LocalSugarLog> logs) {
+    if (logs.isEmpty) return 0;
+    final normalizedDates = logs
+        .map((log) => DateTime(log.date.year, log.date.month, log.date.day))
+        .toSet();
+    var streak = 0;
+    var cursor = DateTime.now();
+    while (normalizedDates
+        .contains(DateTime(cursor.year, cursor.month, cursor.day))) {
+      streak++;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    return streak;
+  }
+
+  SugarLog _mapLocalLog(LocalSugarLog log) {
+    final emotion = Emotion.values.firstWhere(
+      (e) => e.name == log.emotion.toUpperCase(),
+      orElse: () => Emotion.NEUTRAL,
+    );
+    final identifier = log.id ?? log.remoteId ?? log.hashCode;
+    return SugarLog(
+      id: identifier,
+      sugarGrams: log.sugarGrams,
+      date: log.date,
+      hour: log.hour,
+      minute: log.minute,
+      productName: log.productName ?? '',
+      sugarType: log.sugarType ?? '',
+      contextNote: log.contextNote ?? '',
+      emotion: emotion,
+      location: log.location ?? '',
+      wasCraving: log.wasCraving,
+      visibility: log.visibility,
+    );
+  }
+
   Future<void> _updateDailyGoalDialog() async {
     int? newGoal = _dailyGoal;
     final controller = TextEditingController(text: _dailyGoal.toString());
@@ -149,6 +238,29 @@ class _HomePageState extends State<HomePage> {
                 final parsed = int.tryParse(controller.text);
                 if (parsed != null && parsed > 0) {
                   newGoal = parsed;
+                  if (_isGuestMode) {
+                    final user = await _ensureLocalUser();
+                    if (user?.email == null) return;
+                    await _authRepository.persistUserProfile(
+                      email: user!.email,
+                      fullName: user.fullName,
+                      role: user.role,
+                      provider: user.authProvider,
+                      goal: newGoal,
+                      biometricEnabled: user.biometricEnabled,
+                      allowPartnerRequests: user.allowPartnerRequests,
+                      featureFlags: user.featureFlags,
+                    );
+                    if (!mounted) return;
+                    setState(() => _dailyGoal = newGoal!);
+                    Navigator.pop(ctx);
+                    await _showFlushBar(
+                      message: "Daily goal updated!",
+                      color: Colors.green,
+                      icon: Icons.check_circle,
+                    );
+                    return;
+                  }
                   final token = await _getToken();
                   if (token != null) {
                     final url = Uri.parse('$baseUrl/api/users/me/goal');
@@ -186,6 +298,11 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _fetchLogs() async {
     setState(() => _loading = true);
+    if (_isGuestMode) {
+      await _fetchLocalLogs();
+      setState(() => _loading = false);
+      return;
+    }
     final token = await _getToken();
     if (token == null) {
       setState(() => _loading = false);
@@ -208,18 +325,16 @@ class _HomePageState extends State<HomePage> {
           _logs = data.map((e) => SugarLog.fromJson(e)).toList();
         });
       } else {
-        await _showFlushBar(
-          message: 'Could not load logs: ${response.statusCode}',
-          color: Colors.red,
-          icon: Icons.error,
-        );
+        // If the backend returns a non-success status (e.g. 404/500),
+        // gracefully show an empty list without spamming the UI.
+        debugPrint(
+            'Sugar log fetch returned ${response.statusCode}: ${response.body}');
+        setState(() => _logs = []);
       }
     } catch (e) {
-      await _showFlushBar(
-        message: 'Error loading logs: $e',
-        color: Colors.red,
-        icon: Icons.error,
-      );
+      // Network/parse errors should not break the screen either.
+      debugPrint('Sugar log fetch failed: $e');
+      setState(() => _logs = []);
     } finally {
       setState(() => _loading = false);
     }
@@ -847,6 +962,21 @@ class _HomePageState extends State<HomePage> {
                               minY: 0,
                               barTouchData: BarTouchData(
                                 enabled: true,
+                                handleBuiltInTouches: true,
+                                touchCallback: (event, response) {
+                                  if (!event.isInterestedForInteractions ||
+                                      response == null ||
+                                      response.spot == null) {
+                                    if (_highlightedBarIndex != null) {
+                                      setState(() => _highlightedBarIndex = null);
+                                    }
+                                    return;
+                                  }
+                                  final newIndex = response.spot!.touchedBarGroupIndex;
+                                  if (_highlightedBarIndex != newIndex) {
+                                    setState(() => _highlightedBarIndex = newIndex);
+                                  }
+                                },
                                 touchTooltipData: BarTouchTooltipData(
                                   tooltipBgColor: AppTheme.primaryPurple,
                                   tooltipRoundedRadius: 12,
@@ -988,7 +1118,7 @@ class _HomePageState extends State<HomePage> {
                                       ),
                                     ),
                                   ],
-                                  showingTooltipIndicators: isToday ? [0] : [],
+                                  showingTooltipIndicators: _highlightedBarIndex == index ? [0] : [],
                                 );
                               }),
                             ),

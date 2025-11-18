@@ -1,12 +1,11 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'constants.dart';
+import 'package:provider/provider.dart';
 import 'theme/app_theme.dart';
 import 'widgets/gust_button.dart';
 import 'widgets/gust_text_field.dart';
 import 'widgets/password_strength_indicator.dart';
 import 'utils/notification_helper.dart';
+import 'state/auth_state.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -21,7 +20,6 @@ class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  bool _isLoading = false;
 
   // Focus nodes to improve keyboard navigation (kept for possible future focus management)
   final FocusNode _nameFocus = FocusNode();
@@ -42,52 +40,32 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> _register() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/register'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'fullName': _usernameController.text.trim(),
-          'email': _emailController.text.trim(),
-          'password': _passwordController.text.trim(),
-        }),
+    final authState = context.read<AuthState>();
+    final success = await authState.registerWithEmail(
+      fullName: _usernameController.text.trim(),
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
+    if (!mounted) return;
+    if (success) {
+      await NotificationHelper.showSuccess(
+        context,
+        'Welcome to GUST! Let\'s finish onboarding.',
       );
-
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        await NotificationHelper.showSuccess(
-          context,
-          'Registration successful! You can now login.',
-        );
-        if (!mounted) return;
-        Navigator.of(context).pop();
-      } else if (response.statusCode == 409) {
-        final message = NotificationHelper.parseErrorMessage(
-          response.body,
-          fallback: 'An account with this email already exists.',
-        );
-        await NotificationHelper.showWarning(context, message);
-      } else {
-        final message = NotificationHelper.parseErrorMessage(
-          response.body,
-          fallback: NotificationHelper.getHttpErrorMessage(response.statusCode),
-        );
-        await NotificationHelper.showError(context, message, title: 'Registration Failed');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      await NotificationHelper.showNetworkError(context, onRetry: _register);
+      Navigator.pushReplacementNamed(context, '/onboarding');
+    } else {
+      final message = authState.errorMessage ?? 'Registration failed. Please try again.';
+      await NotificationHelper.showError(
+        context,
+        message,
+        title: 'Registration Failed',
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final authState = context.watch<AuthState>();
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -240,7 +218,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                 GustButton(
                                   text: 'Create Account',
                                   onPressed: _register,
-                                  isLoading: _isLoading,
+                                  isLoading: authState.isLoading,
                                   type: ButtonType.primary,
                                   width: double.infinity,
                                 ),

@@ -12,6 +12,7 @@ class SugarLog {
   final Emotion emotion;
   final String location;
   final bool wasCraving;
+  final String visibility;
 
   SugarLog({
     required this.id,
@@ -25,6 +26,7 @@ class SugarLog {
     required this.emotion,
     required this.location,
     required this.wasCraving,
+    this.visibility = 'PRIVATE',
   });
 
   factory SugarLog.fromJson(Map<String, dynamic> json) {
@@ -37,11 +39,21 @@ class SugarLog {
       productName: json['productName'] ?? '',
       sugarType: json['sugarType'] ?? '',
       contextNote: json['contextNote'] ?? '',
-      emotion: Emotion.values.firstWhere(
-          (e) => e.name == (json['emotion'] as String).toUpperCase(),
-          orElse: () => Emotion.NEUTRAL),
+      emotion: _parseEmotion(json['emotion']),
       location: json['location'] ?? '',
-      wasCraving: json['wasCraving'] as bool,
+      wasCraving: json['wasCraving'] as bool? ?? false,
+      visibility: json['visibility'] as String? ?? 'PRIVATE',
+    );
+  }
+
+  static Emotion _parseEmotion(dynamic raw) {
+    if (raw == null) {
+      return Emotion.NEUTRAL;
+    }
+    final value = raw.toString().toUpperCase();
+    return Emotion.values.firstWhere(
+      (e) => e.name == value,
+      orElse: () => Emotion.NEUTRAL,
     );
   }
 }

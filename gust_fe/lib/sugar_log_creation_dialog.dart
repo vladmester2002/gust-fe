@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:another_flushbar/flushbar.dart'; // For notifications
 import 'constants.dart';
@@ -10,6 +9,11 @@ import 'sugar_log.dart';
 import 'theme/app_theme.dart';
 import 'widgets/gust_text_field.dart';
 import 'widgets/gust_button.dart';
+import 'data/models/local_sugar_log.dart';
+import 'data/models/local_user.dart';
+import 'repositories/auth_repository.dart';
+import 'repositories/sugar_log_repository.dart';
+import 'services/auth_helper.dart';
 
 class SugarLogCreationDialog extends StatefulWidget {
   final Function(SugarLog) onCreated;
@@ -42,6 +46,10 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
   late Emotion selectedEmotion;
   late bool wasCraving;
   bool _loading = false;
+  bool _isGuestMode = false;
+  final AuthRepository _authRepository = AuthRepository();
+  final SugarLogRepository _logRepository = SugarLogRepository();
+  LocalUser? _localUser;
 
   @override
   void initState() {
@@ -59,11 +67,25 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
         : TimeOfDay.now();
     selectedEmotion = log?.emotion ?? Emotion.NEUTRAL;
     wasCraving = log?.wasCraving ?? false;
+    _initGuestMode();
   }
 
-  Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token');
+  Future<void> _initGuestMode() async {
+    final isGuest = await AuthHelper.isGuestSession();
+    if (!mounted) {
+      _isGuestMode = isGuest;
+      return;
+    }
+    setState(() => _isGuestMode = isGuest);
+  }
+
+  Future<String?> _getToken() => AuthHelper.getNetworkToken();
+
+  Future<LocalUser?> _ensureLocalUser() async {
+    if (_localUser != null) return _localUser;
+    final user = await _authRepository.getActiveUser();
+    _localUser = user;
+    return user;
   }
 
   Map<String, dynamic> _buildLogData() => {
@@ -78,6 +100,119 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
         "location": locationController.text,
         "wasCraving": wasCraving
       };
+
+  LocalSugarLog _buildLocalSugarLog(int userId, {int? id}) {
+    return LocalSugarLog(
+      id: id,
+      userId: userId,
+      sugarGrams: int.tryParse(sugarController.text) ?? 0,
+      date: DateTime(selectedDate.year, selectedDate.month, selectedDate.day),
+      hour: selectedTime.hour,
+      minute: selectedTime.minute,
+      productName: productNameController.text,
+      sugarType: sugarTypeController.text,
+      contextNote: contextNoteController.text,
+      emotion: selectedEmotion.name.toUpperCase(),
+      location: locationController.text,
+      wasCraving: wasCraving,
+      visibility: widget.existingLog?.visibility ?? 'PRIVATE',
+      isDirty: true,
+    );
+  }
+
+  SugarLog _mapLocalToSugarLog(LocalSugarLog log) {
+    final emotion = Emotion.values.firstWhere(
+      (e) => e.name == log.emotion.toUpperCase(),
+      orElse: () => Emotion.NEUTRAL,
+    );
+    final identifier = log.id ?? log.remoteId ?? log.hashCode;
+    return SugarLog(
+      id: identifier,
+      sugarGrams: log.sugarGrams,
+      date: log.date,
+      hour: log.hour,
+      minute: log.minute,
+      productName: log.productName ?? '',
+      sugarType: log.sugarType ?? '',
+      contextNote: log.contextNote ?? '',
+      emotion: emotion,
+      location: log.location ?? '',
+      wasCraving: log.wasCraving,
+      visibility: log.visibility,
+    );
+  }
+
+  Future<void> _createLocalLog() async {
+    final user = await _ensureLocalUser();
+    if (user?.id == null) {
+      await _showFlushBar(
+        message: 'Guest profile not initialized. Please restart the app.',
+        color: Colors.red,
+        icon: Icons.error,
+      );
+      return;
+    }
+    final localLog = _buildLocalSugarLog(user!.id!);
+    final newId = await _logRepository.addLog(localLog);
+    final saved = localLog.copyWith(id: newId);
+    if (mounted) {
+      Navigator.pop(context);
+      widget.onCreated(_mapLocalToSugarLog(saved));
+    }
+    await _showFlushBar(
+      message: 'Sugar log added!',
+      color: Colors.green,
+      icon: Icons.check_circle,
+    );
+  }
+
+  Future<void> _updateLocalLog() async {
+    if (widget.existingLog == null) return;
+    final user = await _ensureLocalUser();
+    if (user?.id == null) {
+      await _showFlushBar(
+        message: 'Guest profile not initialized. Please restart the app.',
+        color: Colors.red,
+        icon: Icons.error,
+      );
+      return;
+    }
+    final localLog =
+        _buildLocalSugarLog(user!.id!, id: widget.existingLog!.id);
+    await _logRepository.updateLog(localLog);
+    if (mounted) {
+      Navigator.pop(context);
+      widget.onUpdated?.call(_mapLocalToSugarLog(localLog));
+    }
+    await _showFlushBar(
+      message: 'Sugar log updated!',
+      color: Colors.green,
+      icon: Icons.check_circle,
+    );
+  }
+
+  Future<void> _deleteLocalLog() async {
+    if (widget.existingLog == null) return;
+    final user = await _ensureLocalUser();
+    if (user?.id == null) {
+      await _showFlushBar(
+        message: 'Guest profile not initialized. Please restart the app.',
+        color: Colors.red,
+        icon: Icons.error,
+      );
+      return;
+    }
+    await _logRepository.deleteLog(widget.existingLog!.id, user!.id!);
+    if (mounted) {
+      Navigator.pop(context);
+      widget.onDeleted?.call(widget.existingLog!);
+    }
+    await _showFlushBar(
+      message: 'Sugar log deleted!',
+      color: Colors.green,
+      icon: Icons.delete,
+    );
+  }
 
   Future<void> _showFlushBar({
     required String message,
@@ -102,6 +237,10 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
     if (!mounted) return;
     setState(() => _loading = true);
     try {
+      if (_isGuestMode) {
+        await _createLocalLog();
+        return;
+      }
       final token = await _getToken();
       if (token == null) {
         if (mounted) {
@@ -166,6 +305,10 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
     if (widget.existingLog == null || !mounted) return;
     setState(() => _loading = true);
     try {
+      if (_isGuestMode) {
+        await _updateLocalLog();
+        return;
+      }
       final token = await _getToken();
       if (token == null) {
         if (mounted) {
@@ -228,6 +371,10 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
     if (widget.existingLog == null || !mounted) return;
     setState(() => _loading = true);
     try {
+      if (_isGuestMode) {
+        await _deleteLocalLog();
+        return;
+      }
       final token = await _getToken();
       if (token == null) {
         if (mounted) {

@@ -1,12 +1,16 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import 'constants.dart'; // Make sure this has baseUrl
 import 'main.dart'; // For AppRoutes
 import 'services/biometric_auth_service.dart';
 import 'services/auth_helper.dart';
 import 'utils/notification_helper.dart';
+import 'data/models/local_user.dart';
+import 'repositories/auth_repository.dart';
+import 'state/auth_state.dart';
+import 'partner_access_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -19,6 +23,9 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _loading = true;
   bool _updating = false;
   String? _error;
+  bool _guestMode = false;
+  final AuthRepository _authRepository = AuthRepository();
+  LocalUser? _localUser;
 
   // Profile fields
   String _fullName = "";
@@ -43,8 +50,15 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     _nameController = TextEditingController();
     _emailController = TextEditingController();
-    _fetchProfile();
+    _bootstrapProfile();
     _checkBiometric();
+  }
+
+  Future<void> _bootstrapProfile() async {
+    final isGuest = await AuthHelper.isGuestSession();
+    if (!mounted) return;
+    setState(() => _guestMode = isGuest);
+    await _fetchProfile();
   }
   
   Future<void> _checkBiometric() async {
@@ -60,9 +74,13 @@ class _ProfilePageState extends State<ProfilePage> {
     });
   }
 
-  Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token');
+  Future<String?> _getToken() => AuthHelper.getNetworkToken();
+
+  Future<LocalUser?> _ensureLocalUser() async {
+    if (_localUser != null) return _localUser;
+    final user = await _authRepository.getActiveUser();
+    _localUser = user;
+    return user;
   }
 
   Future<void> _fetchProfile() async {
@@ -71,27 +89,38 @@ class _ProfilePageState extends State<ProfilePage> {
       _error = null;
     });
     try {
-      final token = await _getToken();
-      if (token == null || token.isEmpty) {
-        throw Exception('Missing authentication token. Please log in again.');
+      if (_guestMode) {
+        final user = await _ensureLocalUser();
+        if (user == null) {
+          throw Exception('No local profile cached for guest mode.');
+        }
+        _fullName = user.fullName;
+        _email = user.email;
+        _dailySugarGoal = user.dailySugarGoal ?? 0;
+        _nameController = TextEditingController(text: _fullName);
+        _emailController = TextEditingController(text: _email);
+      } else {
+        final token = await _getToken();
+        if (token == null || token.isEmpty) {
+          throw Exception('Missing authentication token. Please log in again.');
+        }
+        final resp = await http.get(
+          Uri.parse('$baseUrl/api/users/me/profile'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json'
+          },
+        );
+        if (resp.statusCode != 200) {
+          throw Exception(resp.body);
+        }
+        final data = jsonDecode(resp.body);
+        _fullName = data['fullName'] ?? "";
+        _email = data['email'] ?? "";
+        _dailySugarGoal = data['dailySugarGoal'] ?? 0;
+        _nameController = TextEditingController(text: _fullName);
+        _emailController = TextEditingController(text: _email);
       }
-      final resp = await http.get(
-        Uri.parse('$baseUrl/api/users/me/profile'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json'
-        },
-      );
-      if (resp.statusCode != 200) {
-        throw Exception(resp.body);
-      }
-      final data = jsonDecode(resp.body);
-      _fullName = data['fullName'] ?? "";
-      _email = data['email'] ?? "";
-      _dailySugarGoal = data['dailySugarGoal'] ?? 0;
-      // Reset controllers every load
-      _nameController = TextEditingController(text: _fullName);
-      _emailController = TextEditingController(text: _email);
     } catch (e) {
       _error = "Failed to load profile: $e";
     }
@@ -106,6 +135,39 @@ class _ProfilePageState extends State<ProfilePage> {
       _error = null;
     });
     try {
+      if (_guestMode) {
+        final user = await _ensureLocalUser();
+        if (user == null) {
+          throw Exception('No local profile found. Please restart the guest session.');
+        }
+        final updated = await _authRepository.persistUserProfile(
+          email: _emailController.text.trim(),
+          fullName: _nameController.text.trim(),
+          role: user.role,
+          provider: user.authProvider,
+          goal: _dailySugarGoal,
+          allowPartnerRequests: user.allowPartnerRequests,
+          biometricEnabled: user.biometricEnabled,
+          featureFlags: user.featureFlags,
+        );
+        _localUser = updated ?? user;
+        setState(() {
+          _editing = false;
+          _fullName = updated?.fullName ?? _fullName;
+          _email = updated?.email ?? _email;
+          _dailySugarGoal = updated?.dailySugarGoal ?? _dailySugarGoal;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Profile updated!"),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        return;
+      }
+
       final token = await _getToken();
       if (token == null) {
         throw Exception("Not authenticated. Please login again.");
@@ -164,14 +226,14 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _logout() async {
-    // Clear all auth data using helper
-    await AuthHelper.clearAuth();
-    
-    // Clear biometric auth data
+    final authState = context.read<AuthState>();
+    await authState.signOut();
     await _biometricService.clearAuthToken();
-    
     if (!mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AppRoutes.login,
+      (route) => false,
+    );
   }
 
   @override
@@ -538,88 +600,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                 ),
                               
-                              if (!_editing) const SizedBox(height: 16),
-                              
-                              // Daily Goal Card
-                              if (!_editing)
-                                Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        const Color(0xFF6A1B9A).withOpacity(0.1),
-                                        const Color(0xFFAB47BC).withOpacity(0.05),
-                                      ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: const Color(0xFF6A1B9A).withOpacity(0.2),
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  padding: const EdgeInsets.all(20),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF6A1B9A).withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: const Icon(
-                                          Icons.track_changes_rounded,
-                                          color: Color(0xFF6A1B9A),
-                                          size: 28,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            const Text(
-                                              'Daily Sugar Goal',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 16,
-                                                color: Color(0xFF212121),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              'Track your sugar intake',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                color: Colors.grey[600],
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF6A1B9A),
-                                          borderRadius: BorderRadius.circular(20),
-                                        ),
-                                        child: Text(
-                                          '${_dailySugarGoal}g',
-                                          style: const TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w800,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              
+                              const SizedBox(height: 16),
+                              if (!_editing && !_guestMode)
+                                _buildPartnerShortcutCard(context),
                               const SizedBox(height: 32),
                             ],
                           ),
@@ -693,5 +676,74 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       }
     }
+  }
+
+  Widget _buildPartnerShortcutCard(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF4A148C).withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF4A148C).withOpacity(0.15),
+          width: 1.2,
+        ),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF4A148C).withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.handshake_rounded,
+              color: Color(0xFF4A148C),
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Partner collaboration',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    color: Color(0xFF212121),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Invite coaches or caregivers and manage requests directly from here.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PartnerAccessPage()),
+              );
+            },
+            icon: const Icon(Icons.arrow_forward_rounded),
+            label: const Text('Open'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4A148C),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -8,6 +8,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'emotion.dart';
 import 'package:another_flushbar/flushbar.dart';
+import 'package:provider/provider.dart';
+import 'services/partner_access_api.dart';
+import 'state/auth_state.dart';
+import 'services/auth_helper.dart';
 
 // Add for file download:
 import 'dart:io' as io;
@@ -23,10 +27,10 @@ const List<String> monthOrder = [
 /// You can customize these time slots and their emoji here:
 const List<String> timeSlots = ["Morning", "Afternoon", "Evening", "Night"];
 const Map<String, String> timeSlotEmojis = {
-  "Morning": "🌅",
-  "Afternoon": "🌞",
-  "Evening": "🌇",
-  "Night": "🌙",
+  "Morning": "??",
+  "Afternoon": "???",
+  "Evening": "??",
+  "Night": "??",
 };
 
 String getEmotionEmoji(String? label) {
@@ -90,7 +94,16 @@ class AnalyticsResponse {
 
 class AnalyticsPage extends StatefulWidget {
   final dynamic logs;
-  const AnalyticsPage({super.key, required this.logs});
+  final int? initialOwnerId;
+  final String? initialOwnerName;
+  final bool embedInNavigation;
+  const AnalyticsPage({
+    super.key,
+    required this.logs,
+    this.initialOwnerId,
+    this.initialOwnerName,
+    this.embedInNavigation = true,
+  });
 
   @override
   State<AnalyticsPage> createState() => _AnalyticsPageState();
@@ -115,15 +128,23 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
   String _viewMode = 'overall'; // 'overall', 'emotions', 'timeOfDay'
   DateTime _startDate = DateTime.now().subtract(const Duration(days: 30));
   DateTime _endDate = DateTime.now();
+  final PartnerAccessApi _partnerApi = PartnerAccessApi();
+  List<PartnerAccessEntry> _analyticsOwners = [];
+  int? _selectedOwnerId;
+  String? _selectedOwnerName;
+  bool _loadingPartnerOwners = false;
 
   @override
   void initState() {
     super.initState();
+    _selectedOwnerId = widget.initialOwnerId;
+    _selectedOwnerName = widget.initialOwnerName;
     _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(_onTabChanged);
     _loadDailyGoal();
     // Load initial data with custom date range (last 30 days by default)
     _fetchCustomData();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadPartnerAssignments());
   }
   // Fetch data based on custom date range and view mode
   Future<void> _fetchCustomData() async {
@@ -159,6 +180,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
       setState(() => _loading = false);
     }
   }
+
+  String _slotForHour(int hour) {
+    if (hour >= 5 && hour < 12) return 'Morning';
+    if (hour >= 12 && hour < 17) return 'Afternoon';
+    if (hour >= 17 && hour < 22) return 'Evening';
+    return 'Night';
+  }
   
   // Fetch daily data across the date range
   Future<void> _fetchDailyDataForRange(String token) async {
@@ -170,12 +198,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     
     while (current.isBefore(end.add(const Duration(days: 1)))) {
       try {
-        final uri = Uri.parse('$baseUrl/api/analytics/daily-trend').replace(
-          queryParameters: {
-            'month': current.month.toString(),
-            'year': current.year.toString(),
-          },
-        );
+        final query = {
+          'month': current.month.toString(),
+          'year': current.year.toString(),
+          if (_selectedOwnerId != null) 'ownerId': _selectedOwnerId!.toString(),
+        };
+        final uri = Uri.parse('$baseUrl/api/analytics/daily-trend')
+            .replace(queryParameters: query);
         
         final resp = await http.get(uri, headers: {
           'Content-Type': 'application/json',
@@ -222,12 +251,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     
     while (current.isBefore(end.add(const Duration(days: 1)))) {
       try {
-        final uri = Uri.parse('$baseUrl/api/analytics/emotion-summary').replace(
-          queryParameters: {
-            'month': current.month.toString(),
-            'year': current.year.toString(),
-          },
-        );
+        final query = {
+          'month': current.month.toString(),
+          'year': current.year.toString(),
+          if (_selectedOwnerId != null) 'ownerId': _selectedOwnerId!.toString(),
+        };
+        final uri = Uri.parse('$baseUrl/api/analytics/emotion-summary')
+            .replace(queryParameters: query);
         
         final resp = await http.get(uri, headers: {
           'Content-Type': 'application/json',
@@ -281,11 +311,12 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     
     while (!current.isAfter(_endDate)) {
       try {
-        final uri = Uri.parse('$baseUrl/api/analytics/time-of-day-pattern').replace(
-          queryParameters: {
-            'date': DateFormat('yyyy-MM-dd').format(current),
-          },
-        );
+        final query = {
+          'date': DateFormat('yyyy-MM-dd').format(current),
+          if (_selectedOwnerId != null) 'ownerId': _selectedOwnerId!.toString(),
+        };
+        final uri = Uri.parse('$baseUrl/api/analytics/time-of-day-pattern')
+            .replace(queryParameters: query);
         
         final resp = await http.get(uri, headers: {
           'Content-Type': 'application/json',
@@ -339,6 +370,38 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     });
   }
 
+  Future<void> _loadPartnerAssignments() async {
+    if (!mounted) return;
+    final authState = context.read<AuthState?>();
+    final role = authState?.currentUser?.role ?? '';
+    final email = authState?.currentUser?.email;
+    if (email == null || role.toUpperCase() != 'PARTNER') {
+      return;
+    }
+    setState(() => _loadingPartnerOwners = true);
+    try {
+      final assignments = await _partnerApi.assignmentsForModule('ANALYTICS');
+      if (!mounted) return;
+      setState(() {
+        _analyticsOwners = assignments;
+      });
+    } catch (_) {
+      // ignore errors in optional filter loading
+    } finally {
+      if (mounted) {
+        setState(() => _loadingPartnerOwners = false);
+      }
+    }
+  }
+
+  void _applyOwnerSelection(int? ownerId, String? ownerName) {
+    setState(() {
+      _selectedOwnerId = ownerId;
+      _selectedOwnerName = ownerName;
+    });
+    _fetchCustomData();
+  }
+
   void _onTabChanged() {
     if (_tabController.index != _lastTabIndex && (_tabController.index == 0 || _tabController.index == 1)) {
       setState(() {
@@ -350,10 +413,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     _fetchTabData();
   }
 
-  Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token');
-  }
+  Future<String?> _getToken() => AuthHelper.getNetworkToken();
 
   // ------ CSV EXPORT BUTTON FUNCTIONALITY ---------
   Future<void> _exportCsv() async {
@@ -361,6 +421,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     _downloading = true;
   });
   try {
+    if (_selectedOwnerId != null) {
+      throw Exception('CSV export is only available for your own analytics.');
+    }
     final token = await _getToken();
     if (token == null) throw Exception("Not logged in");
 
@@ -506,8 +569,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
           break;
       }
     }
+    if (_selectedOwnerId != null) {
+      params['ownerId'] = _selectedOwnerId!.toString();
+    }
+    final query = params.isEmpty ? null : params;
     try {
-      final uri = Uri.parse('$baseUrl$endpoint').replace(queryParameters: params.isNotEmpty ? params : null);
+      final uri =
+          Uri.parse('$baseUrl$endpoint').replace(queryParameters: query);
       final resp = await http.get(uri, headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
@@ -3388,6 +3456,114 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
       ),
     );
   }
+
+  Widget _buildPartnerOwnerDropdown() {
+    final owners =
+        _analyticsOwners.where((entry) => entry.ownerId != null).toList();
+    if (_selectedOwnerId != null &&
+        owners.every((entry) => entry.ownerId != _selectedOwnerId)) {
+      owners.add(
+        PartnerAccessEntry(
+          id: _selectedOwnerId!,
+          ownerId: _selectedOwnerId,
+          ownerName: _selectedOwnerName ?? 'Shared partner',
+          ownerEmail: '',
+          partnerId: null,
+          partnerName: 'You',
+          partnerEmail: '',
+          module: 'ANALYTICS',
+          status: 'APPROVED',
+        ),
+      );
+    }
+    final bool shouldRender =
+        owners.isNotEmpty || _selectedOwnerId != null || _loadingPartnerOwners;
+    if (!shouldRender) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InputDecorator(
+            decoration: InputDecoration(
+              labelText: 'Collaborator analytics',
+              filled: true,
+              fillColor: const Color(0xFFF6F1FF),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide:
+                    const BorderSide(color: Color(0xFFB39DDB), width: 1.2),
+              ),
+              suffixIcon: _selectedOwnerId != null
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      color: const Color(0xFF7E57C2),
+                      tooltip: 'Back to my data',
+                      onPressed: () => _applyOwnerSelection(null, null),
+                    )
+                  : null,
+            ),
+            child: _loadingPartnerOwners
+                ? const LinearProgressIndicator()
+                : DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      isExpanded: true,
+                      hint: const Text('Select collaborator'),
+                      value: _selectedOwnerId,
+                      items: owners.map((entry) {
+                        return DropdownMenuItem<int>(
+                          value: entry.ownerId,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                entry.ownerName,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600),
+                              ),
+                              if ((entry.ownerEmail ?? '').isNotEmpty)
+                                Text(
+                                  entry.ownerEmail!,
+                                  style: const TextStyle(
+                                      fontSize: 11, color: Colors.black54),
+                                ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value == null) {
+                          _applyOwnerSelection(null, null);
+                        } else {
+                          final match = owners.firstWhere(
+                            (entry) => entry.ownerId == value,
+                            orElse: () => owners.first,
+                          );
+                          _applyOwnerSelection(match.ownerId, match.ownerName);
+                        }
+                      },
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 8),
+          if (_selectedOwnerId == null)
+            Text(
+              'Viewing your own analytics.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF5E35B1), fontWeight: FontWeight.w600),
+            )
+          else
+            Text(
+              'Exploring insights shared by ${_selectedOwnerName ?? 'your collaborator'}.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF5E35B1), fontWeight: FontWeight.w600),
+            ),
+        ],
+      ),
+    );
+  }
   
   Widget _buildQuickInsightsRow() {
     final values = _data.map((e) => e.value).toList();
@@ -3496,6 +3672,18 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
   
   @override
   Widget build(BuildContext context) {
+    final bool showingPartner = _selectedOwnerId != null;
+    final String baseName =
+        showingPartner ? (_selectedOwnerName ?? 'Partner') : 'Your';
+    final bool needsApostropheS =
+        showingPartner ? !baseName.toLowerCase().endsWith('s') : false;
+    final String titleText = showingPartner
+        ? '$baseName${needsApostropheS ? '\'s' : '\''} Insight Studio'
+        : 'Sugar Insight Studio';
+    final String subtitleText = showingPartner
+        ? 'Exploring data shared by $baseName'
+        : 'Track your sugar journey';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       body: RefreshIndicator(
@@ -3503,76 +3691,80 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
         color: const Color(0xFF6A1B9A),
         child: CustomScrollView(
           slivers: [
-            // Stunning App Bar with gradient
             SliverAppBar(
               expandedHeight: 120,
               floating: false,
               pinned: true,
-              automaticallyImplyLeading: false,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF6A1B9A),
-                      Color(0xFF8E24AA),
-                      Color(0xFFAB47BC),
-                    ],
-                  ),
-                ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        const Text(
-                          '📊 Analytics Dashboard',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Track your sugar journey',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+              automaticallyImplyLeading: !widget.embedInNavigation,
+              leading: widget.embedInNavigation
+                  ? null
+                  : const BackButton(color: Colors.white),
+              flexibleSpace: FlexibleSpaceBar(
+                background: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF6A1B9A),
+                        Color(0xFF8E24AA),
+                        Color(0xFFAB47BC),
                       ],
+                    ),
+                  ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Text(
+                            titleText,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitleText,
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.9),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          
-          // Main Content
-          SliverToBoxAdapter(
-            child: _loading
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(40),
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF6A1B9A),
+            SliverToBoxAdapter(
+              child: _buildPartnerOwnerDropdown(),
+            ),
+            SliverToBoxAdapter(
+              child: _loading
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(40),
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF6A1B9A),
+                        ),
                       ),
-                    ),
-                  )
-                : _error != null
-                    ? _buildErrorState(_error!)
-                    : _buildUnifiedDashboard(),
-          ),
-        ],
+                    )
+                  : _error != null
+                      ? _buildErrorState(_error!)
+                      : _buildUnifiedDashboard(),
+            ),
+          ],
         ),
       ),
     );
   }
 }
+

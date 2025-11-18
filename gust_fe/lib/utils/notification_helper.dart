@@ -68,10 +68,12 @@ class NotificationHelper {
     BuildContext context,
     String message, {
     Duration duration = const Duration(seconds: 3),
+    String? title,
   }) async {
     if (!context.mounted) return;
     
     await Flushbar(
+      title: title,
       message: message,
       duration: duration,
       backgroundColor: AppTheme.warningOrange,

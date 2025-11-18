@@ -1,15 +1,15 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:google_sign_in/google_sign_in.dart';
-import 'constants.dart';
+import 'package:flutter/foundation.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'theme/app_theme.dart';
 import 'widgets/gust_button.dart';
 import 'widgets/gust_text_field.dart';
 import 'widgets/auth_provider_buttons.dart';
 import 'services/biometric_auth_service.dart';
 import 'utils/notification_helper.dart';
+import 'state/auth_state.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -22,129 +22,62 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  bool _isLoading = false;
   late final AnimationController _animController;
   late final Animation<Offset> _slideAnim;
   late final Animation<double> _fadeAnim;
   final BiometricAuthService _biometricService = BiometricAuthService();
+  bool _biometricVisible = false;
   // (No explicit focus nodes required; keyboard flow uses FocusScope)
 
-  Future<void> _login() async {
+  Future<void> _loginWithEmail() async {
     if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final email = _usernameController.text.trim();
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'password': _passwordController.text.trim(),
-        }),
-      );
-
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final token = data['token'];
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('jwt_token', token);
-        await _biometricService.saveUserEmail(email);
-        await _biometricService.saveAuthToken(token);
-
-        final hasCompletedOnboarding = prefs.getBool('onboarding_completed') ?? false;
-
-        if (!mounted) return;
-
-        Navigator.pushReplacementNamed(
-          context,
-          hasCompletedOnboarding ? '/main-nav' : '/onboarding',
-        );
-      } else {
-        if (!mounted) return;
-        final message = NotificationHelper.parseErrorMessage(
-          response.body,
-          fallback: NotificationHelper.getHttpErrorMessage(response.statusCode),
-        );
-        await NotificationHelper.showError(context, message, title: 'Login Failed');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      await NotificationHelper.showNetworkError(context, onRetry: _login);
-    }
+    final authState = context.read<AuthState>();
+    final success = await authState.loginWithEmail(
+      _usernameController.text.trim(),
+      _passwordController.text.trim(),
+    );
+    await _handleAuthResult(success);
   }
 
-  Future<void> _signInWithGoogle() async {
-    if (googleClientId.isEmpty) {
-      await NotificationHelper.showWarning(
+  Future<void> _loginWithGoogle() async {
+    final authState = context.read<AuthState>();
+    final success = await authState.loginWithGoogle();
+    await _handleAuthResult(success);
+  }
+
+  Future<void> _loginAnonymously() async {
+    final authState = context.read<AuthState>();
+    final success = await authState.loginAnonymously();
+    await _handleAuthResult(success);
+  }
+
+  Future<void> _loginWithBiometrics() async {
+    final authState = context.read<AuthState>();
+    final success = await authState.loginWithBiometrics();
+    await _handleAuthResult(success);
+  }
+
+  Future<void> _handleAuthResult(bool success) async {
+    if (!mounted) return;
+    final authState = context.read<AuthState>();
+    if (success) {
+      final prefs = await SharedPreferences.getInstance();
+      final hasCompletedOnboarding =
+          prefs.getBool('onboarding_completed') ?? false;
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(
         context,
-        'Google Sign-In not configured yet.\n\nPlease add your Google Client ID to constants.dart',
-        duration: const Duration(seconds: 5),
+        hasCompletedOnboarding ? '/main-nav' : '/onboarding',
       );
       return;
     }
 
-    setState(() => _isLoading = true);
-
-    try {
-      final googleSignIn = GoogleSignIn(
-        scopes: ['email', 'profile'],
-        clientId: googleClientId,
-      );
-
-      final GoogleSignInAccount? account = await googleSignIn.signIn();
-
-      if (account == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final auth = await account.authentication;
-      final idToken = auth.idToken;
-
-      if (idToken != null) {
-        try {
-          final response = await http.post(
-            Uri.parse('$baseUrl/api/auth/google'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'idToken': idToken}),
-          );
-
-          if (response.statusCode == 200) {
-            final data = jsonDecode(response.body);
-            final token = data['token'];
-            if (token != null) {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setString('jwt_token', token);
-              if (!mounted) return;
-              setState(() => _isLoading = false);
-              Navigator.pushReplacementNamed(context, '/main-nav');
-              return;
-            }
-          }
-        } catch (_) {}
-      }
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('google_email', account.email);
-      await prefs.setString('google_display_name', account.displayName ?? '');
-
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      Navigator.pushReplacementNamed(context, '/main-nav');
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
+    final message = authState.errorMessage;
+    if (message != null && mounted) {
       await NotificationHelper.showError(
         context,
-        'Failed to sign in with Google. Please try again.',
-        title: 'Google Sign-In Error',
+        message,
+        title: 'Authentication Failed',
       );
     }
   }
@@ -168,9 +101,10 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
-    
-    // Check if biometric is enabled and try to authenticate
-    _checkBiometricAuth();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkBiometricAuth();
+    });
   }
 
   /// Check if biometric authentication is enabled and authenticate if so
@@ -182,24 +116,23 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     final isAvailable = await _biometricService.isBiometricAvailable();
     if (!isAvailable) return;
 
-    // Try to authenticate
-    final didAuthenticate = await _biometricService.authenticate(
-      reason: 'Authenticate to access GUST',
-    );
-
-    if (didAuthenticate) {
-      // Retrieve stored token
-      final token = await _biometricService.getAuthToken();
-      if (token != null) {
-        // Successfully authenticated with biometric - set flag for welcome message
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('show_welcome_back', true);
-        
-        if (!mounted) return;
-        // Navigate directly to dashboard without notification
-        Navigator.pushReplacementNamed(context, '/main-nav');
-      }
+    if (mounted && !_biometricVisible) {
+      setState(() => _biometricVisible = true);
     }
+
+    final success = await context.read<AuthState>().loginWithBiometrics();
+    if (!success || !mounted) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('show_welcome_back', true);
+    final hasCompletedOnboarding =
+        prefs.getBool('onboarding_completed') ?? false;
+
+    if (!mounted) return;
+    Navigator.pushReplacementNamed(
+      context,
+      hasCompletedOnboarding ? '/main-nav' : '/onboarding',
+    );
   }
 
   @override
@@ -212,6 +145,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
+    final authState = context.watch<AuthState>();
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -278,8 +212,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
                           // Provider buttons (Google & Facebook)
                           AuthProviderButtons(
-                            onGoogle: _signInWithGoogle,
+                            onGoogle: kIsWeb ? null : (_loginWithGoogle),
                             onFacebook: _signInWithFacebook,
+                            onAnonymous: authState.isLoading ? null : _loginAnonymously,
                           ),
 
                           // Divider
@@ -334,7 +269,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                             textInputAction: TextInputAction.done,
                             semanticLabel: 'Password input',
                             autofillHints: const [AutofillHints.password],
-                            onFieldSubmitted: (_) => _login(),
+                            onFieldSubmitted: (_) => _loginWithEmail(),
                             validator: (value) {
                               if (value == null || value.isEmpty) return 'Please enter your password';
                               if (value.length < 6) return 'Password must be at least 6 characters';
@@ -354,11 +289,24 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           // Login Button
                           GustButton(
                             text: 'Login',
-                            onPressed: _login,
-                            isLoading: _isLoading,
+                            onPressed: _loginWithEmail,
+                            isLoading: authState.isLoading,
                             type: ButtonType.primary,
                             width: double.infinity,
                           ),
+                          if (_biometricVisible) ...[
+                            SizedBox(height: AppTheme.spaceSM),
+                            TextButton.icon(
+                              onPressed: authState.isLoading ? null : _loginWithBiometrics,
+                              icon: Icon(Icons.fingerprint, color: AppTheme.accentTeal),
+                              label: Text(
+                                'Sign in with biometrics',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: AppTheme.accentTeal,
+                                    ),
+                              ),
+                            ),
+                          ],
                           SizedBox(height: AppTheme.spaceMD),
 
                           // Register Link

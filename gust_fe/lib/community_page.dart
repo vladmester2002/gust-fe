@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'constants.dart'; // <-- baseUrl
+import 'services/auth_helper.dart';
 
 class UserRankingResponse {
   final String name;
@@ -113,10 +114,7 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
     });
   }
 
-  Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token');
-  }
+  Future<String?> _getToken() => AuthHelper.getNetworkToken();
 
   Future<void> _fetchRankings() async {
     setState(() {
