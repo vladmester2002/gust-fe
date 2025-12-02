@@ -16,15 +16,16 @@ import 'data/models/local_sugar_log.dart';
 import 'state/auth_state.dart';
 import 'admin_console_page.dart';
 import 'emotion.dart';
+import 'state/home_view_model.dart';
 
 class MainNavigation extends StatefulWidget {
   final List<SugarLog> logs;
   final int initialIndex;
   const MainNavigation({
-    Key? key,
+    super.key,
     required this.logs,
     this.initialIndex = 0,
-  }) : super(key: key);
+  });
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
@@ -188,8 +189,8 @@ class _MainNavigationState extends State<MainNavigation> {
     final canLogSugar = authState.featureFlags.contains('sugar_logs');
 
     if (role == 'ADMIN') {
-      return Scaffold(
-        body: const AdminConsolePage(),
+      return const Scaffold(
+        body: AdminConsolePage(),
       );
     }
 
@@ -265,26 +266,31 @@ class _MainNavigationState extends State<MainNavigation> {
       );
     }
 
-    return Scaffold(
-      body: IndexedStack(
-        index: currentIndex,
-        children: tabs.map((tab) => tab.page).toList(),
-      ),
-      floatingActionButton: canLogSugar
-          ? FloatingActionButton(
-              onPressed: _showRegisterModal,
-              child: const Icon(Icons.add),
-              tooltip: "Register Sugar Intake",
-              shape: const CircleBorder(),
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
-        height: 60,
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: navChildren),
+    return ChangeNotifierProvider(
+      create: (_) => HomeViewModel(
+        seedLogs: _logs,
+      )..initialize(),
+      child: Scaffold(
+        body: IndexedStack(
+          index: currentIndex,
+          children: tabs.map((tab) => tab.page).toList(),
+        ),
+        floatingActionButton: canLogSugar
+            ? FloatingActionButton(
+                onPressed: _showRegisterModal,
+                tooltip: "Register Sugar Intake",
+                shape: const CircleBorder(),
+                child: const Icon(Icons.add),
+              )
+            : null,
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        bottomNavigationBar: BottomAppBar(
+          shape: const CircularNotchedRectangle(),
+          notchMargin: 8,
+          height: 60,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: navChildren),
+        ),
       ),
     );
   }

@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:another_flushbar/flushbar.dart';
 import 'constants.dart'; // <-- baseUrl
 import 'services/auth_helper.dart';
+import 'package:provider/provider.dart';
+import 'state/home_view_model.dart';
 
 class UserRankingResponse {
   final String name;
@@ -85,6 +88,7 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
   String? postsError;
   
   String? currentUserName;
+  bool _isGuest = false;
 
   @override
   void initState() {
@@ -96,8 +100,16 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
       }
     });
     _loadUserName();
+    _checkGuestMode();
     _fetchRankings();
     _fetchPosts();
+  }
+
+  Future<void> _checkGuestMode() async {
+    final isGuest = await AuthHelper.isGuestSession();
+    if (mounted) {
+      setState(() => _isGuest = isGuest);
+    }
   }
 
   @override
@@ -122,34 +134,36 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
       rankingsError = null;
     });
     try {
-      final token = await _getToken();
+      final token = _isGuest ? null : await _getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
       final resp = await http.get(
         Uri.parse('$baseUrl/api/community/rankings?period=$period'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json'
-        },
-      );
-      if (resp.statusCode != 200) {
-        // If backend has issues, show mock data instead
-        setState(() {
-          rankings = _getMockRankings();
-          loadingRankings = false;
-        });
+        headers: headers,
+      ).timeout(const Duration(seconds: 5));
+
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        if (mounted) {
+          setState(() {
+            rankings = (data as List)
+                .map((e) => UserRankingResponse.fromJson(e))
+                .toList();
+            loadingRankings = false;
+          });
+        }
         return;
       }
-      final data = jsonDecode(resp.body);
-      setState(() {
-        rankings = (data as List)
-            .map((e) => UserRankingResponse.fromJson(e))
-            .toList();
-        loadingRankings = false;
-      });
     } catch (e) {
-      // Show mock data on any error
+      print('Error fetching rankings: $e');
+    }
+
+    if (mounted) {
       setState(() {
         rankings = _getMockRankings();
-        rankingsError = null; // Don't show error, just use mock data
         loadingRankings = false;
       });
     }
@@ -175,41 +189,142 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
       loadingPosts = true;
       postsError = null;
     });
+
     try {
-      final token = await _getToken();
-      // Try to fetch from backend, if not available use mock data
+      // Guests can try to fetch without token, authenticated users use token
+      final token = _isGuest ? null : await _getToken();
+      
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+
+      // Try to fetch from backend with timeout
       try {
         final resp = await http.get(
           Uri.parse('$baseUrl/api/community/feed'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json'
+          headers: headers,
+        ).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            return http.Response('Timeout', 408);
           },
         );
+        
         if (resp.statusCode == 200) {
           final data = jsonDecode(resp.body);
-          setState(() {
-            posts = (data as List)
-                .map((e) => CommunityPost.fromJson(e))
-                .toList();
-          });
+          final fetchedPosts = (data as List)
+              .map((e) => CommunityPost.fromJson(e))
+              .toList();
+          
+          // Cache the posts locally
+          await _savePostsToCache(fetchedPosts);
+          
+          if (mounted) {
+            setState(() {
+              posts = fetchedPosts;
+              loadingPosts = false;
+            });
+          }
           return;
         }
-      } catch (_) {
-        // Backend endpoint might not exist, use mock data
+      } catch (e) {
+        print('Community feed API error: $e');
+        // Try to load from cache when offline
+        final cachedPosts = await _loadPostsFromCache();
+        if (cachedPosts.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              posts = cachedPosts;
+              loadingPosts = false;
+            });
+          }
+          return;
+        }
       }
       
-      // Mock community posts for demonstration
-      setState(() {
-        posts = _getMockPosts();
-      });
+      // Final fallback to mock community posts
+      if (mounted) {
+        setState(() {
+          posts = _getMockPosts();
+          loadingPosts = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        postsError = "Could not load community feed.";
-        posts = _getMockPosts(); // Show mock data on error
-      });
+      print('Error fetching posts: $e');
+      // Try cache before mock data
+      final cachedPosts = await _loadPostsFromCache();
+      if (mounted) {
+        setState(() {
+          posts = cachedPosts.isNotEmpty ? cachedPosts : _getMockPosts();
+          postsError = null;
+          loadingPosts = false;
+        });
+      }
     }
-    setState(() => loadingPosts = false);
+  }
+
+  Future<void> _savePostsToCache(List<CommunityPost> postsToCache) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final postsJson = postsToCache
+          .map((post) => jsonEncode({
+                'id': post.id,
+                'userName': post.userName,
+                'content': post.content,
+                'type': post.type,
+                'createdAt': post.createdAt.toIso8601String(),
+                'likesCount': post.likesCount,
+                'likedByUser': post.likedByUser,
+              }))
+          .toList();
+      await prefs.setStringList('cached_community_posts', postsJson);
+    } catch (e) {
+      print('Error caching posts: $e');
+    }
+  }
+
+  Future<List<CommunityPost>> _loadPostsFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final postsJson = prefs.getStringList('cached_community_posts');
+      if (postsJson == null || postsJson.isEmpty) return [];
+      
+      return postsJson
+          .map((jsonStr) {
+            final json = jsonDecode(jsonStr);
+            return CommunityPost(
+              id: json['id'],
+              userName: json['userName'] ?? 'Anonymous',
+              content: json['content'] ?? '',
+              type: json['type'] ?? 'support',
+              createdAt: DateTime.parse(json['createdAt']),
+              likesCount: json['likesCount'] ?? 0,
+              likedByUser: json['likedByUser'] ?? false,
+            );
+          })
+          .toList();
+    } catch (e) {
+      print('Error loading cached posts: $e');
+      return [];
+    }
+  }
+
+  Future<bool> _isOnline() async {
+    try {
+      final token = await _getToken();
+      // Try a simple HEAD request to the rankings endpoint (lightweight)
+      final response = await http.head(
+        Uri.parse('$baseUrl/api/community/rankings?period=daily'),
+        headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 3));
+      return response.statusCode < 500; // Accept any non-server-error response
+    } catch (e) {
+      // Any network error means we're offline
+      return false;
+    }
   }
 
   List<CommunityPost> _getMockPosts() {
@@ -266,6 +381,23 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
   }
 
   Future<void> _toggleLike(CommunityPost post) async {
+    // Check if online first
+    final isOnline = await _isOnline();
+    if (!isOnline) {
+      if (mounted) {
+        await Flushbar<void>(
+          message: '⚠️ You\'re offline. Please connect to the internet to like posts.',
+          duration: const Duration(seconds: 3),
+          backgroundColor: Colors.orange,
+          flushbarPosition: FlushbarPosition.TOP,
+          margin: const EdgeInsets.all(8),
+          borderRadius: BorderRadius.circular(8),
+          icon: const Icon(Icons.wifi_off, color: Colors.white),
+        ).show(context);
+      }
+      return;
+    }
+
     // Optimistic update
     setState(() {
       final index = posts.indexWhere((p) => p.id == post.id);
@@ -282,7 +414,7 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
       }
     });
 
-    // Try to update on backend (if endpoint exists)
+    // Try to update on backend
     try {
       final token = await _getToken();
       await http.post(
@@ -292,12 +424,36 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
           'Content-Type': 'application/json'
         },
       );
-    } catch (_) {
-      // Endpoint might not exist, that's okay
+    } catch (e) {
+      // Revert on error
+      setState(() {
+        final index = posts.indexWhere((p) => p.id == post.id);
+        if (index != -1) {
+          posts[index] = post;
+        }
+      });
     }
   }
 
-  void _showCreatePostDialog() {
+  void _showCreatePostDialog() async {
+    // Check if online first
+    final isOnline = await _isOnline();
+    if (!isOnline) {
+      if (mounted) {
+        await Flushbar<void>(
+          message: '⚠️ You\'re offline. Please connect to the internet to create posts.',
+          duration: const Duration(seconds: 3),
+          backgroundColor: Colors.orange,
+          flushbarPosition: FlushbarPosition.TOP,
+          margin: const EdgeInsets.all(8),
+          borderRadius: BorderRadius.circular(8),
+          icon: const Icon(Icons.wifi_off, color: Colors.white),
+        ).show(context);
+      }
+      return;
+    }
+    
+    void _showDialog() {
     final contentController = TextEditingController();
     String selectedType = 'achievement';
     
@@ -610,6 +766,9 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
         ),
       ),
     );
+    }
+    
+    _showDialog();
   }
 
   Future<void> _createPost(String content, String type) async {
@@ -622,15 +781,10 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
       likedByUser: false,
     );
 
-    // Add to local list immediately
-    setState(() {
-      posts.insert(0, newPost);
-    });
-
     // Try to save to backend
     try {
       final token = await _getToken();
-      await http.post(
+      final response = await http.post(
         Uri.parse('$baseUrl/api/community/posts'),
         headers: {
           'Authorization': 'Bearer $token',
@@ -638,8 +792,54 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
         },
         body: jsonEncode(newPost.toJson()),
       );
-    } catch (_) {
-      // Backend might not support this yet
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // Success - add to local list
+        setState(() {
+          posts.insert(0, newPost);
+        });
+        
+        // Show success message
+        if (mounted) {
+          await Flushbar<void>(
+            message: 'Post published successfully!',
+            duration: const Duration(seconds: 2),
+            backgroundColor: Colors.green,
+            flushbarPosition: FlushbarPosition.TOP,
+            margin: const EdgeInsets.all(8),
+            borderRadius: BorderRadius.circular(8),
+            icon: const Icon(Icons.check_circle, color: Colors.white),
+          ).show(context);
+        }
+      } else {
+        // Server error
+        throw Exception('Server error: ${response.statusCode}');
+      }
+    } catch (e) {
+      // Check if this is a network error
+      final errorString = e.toString().toLowerCase();
+      final isNetworkError = errorString.contains('network') || 
+                            errorString.contains('connection') || 
+                            errorString.contains('offline') ||
+                            errorString.contains('socketexception') ||
+                            errorString.contains('failed host lookup');
+      
+      if (mounted) {
+        await Flushbar<void>(
+          message: isNetworkError 
+            ? '⚠️ You\'re offline. Please connect to the internet to post in the community.'
+            : 'Failed to create post: ${e.toString()}',
+          duration: const Duration(seconds: 4),
+          backgroundColor: isNetworkError ? Colors.orange : Colors.red,
+          flushbarPosition: FlushbarPosition.TOP,
+          margin: const EdgeInsets.all(8),
+          borderRadius: BorderRadius.circular(8),
+          icon: Icon(
+            isNetworkError ? Icons.wifi_off : Icons.error,
+            color: Colors.white,
+          ),
+        ).show(context);
+      }
     }
   }
 
@@ -772,16 +972,7 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
           _buildRankingsTab(),
         ],
       ),
-      floatingActionButton: _tabController.index == 0
-          ? FloatingActionButton(
-              onPressed: _showCreatePostDialog,
-              backgroundColor: const Color(0xFF6A1B9A),
-              foregroundColor: Colors.white,
-              elevation: 6,
-              child: const Icon(Icons.add_rounded, size: 28),
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+
     );
   }
 
@@ -917,6 +1108,59 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
           // Daily Motivation Card
           _buildMotivationCard(),
           const SizedBox(height: 20),
+          
+          // Post+ Button (visible for authenticated users)
+          if (!_isGuest)
+            Container(
+              margin: const EdgeInsets.only(bottom: 20),
+              child: InkWell(
+                onTap: _showCreatePostDialog,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF6A1B9A), Color(0xFF8E24AA)],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF6A1B9A).withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.add_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'Share Your Journey',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           
           // Community Posts
           const Row(
@@ -1527,188 +1771,212 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
   }
 
   Widget _buildRankingsTab() {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        // Personal Stats Card
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF6A1B9A),
-                Color(0xFF8E24AA),
+    return Consumer<HomeViewModel>(
+      builder: (context, viewModel, child) {
+        final logs = viewModel.logs;
+        final totalLogs = logs.length;
+        final streakDays = viewModel.streak;
+        
+        // Calculate On Target %
+        final onTargetCount = logs.where((l) => l.sugarGrams <= viewModel.dailyGoal).length;
+        final onTargetPercentage = totalLogs > 0 ? (onTargetCount / totalLogs * 100).toInt() : 0;
+        
+        // Calculate Avg Intake
+        double avgSugar = 0;
+        if (totalLogs > 0) {
+          final totalSugar = logs.fold<double>(0, (sum, item) => sum + item.sugarGrams);
+          avgSugar = totalSugar / totalLogs;
+        }
+
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // Personal Stats Card
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF6A1B9A),
+                    Color(0xFF8E24AA),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6A1B9A).withOpacity(0.3),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.insights_rounded, color: Colors.white, size: 28),
+                      const SizedBox(width: 12),
+                      const Flexible(
+                        child: Text(
+                          'Your Journey',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: -0.5,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatCard(
+                          '$streakDays',
+                          'Day Streak',
+                          Icons.local_fire_department_rounded,
+                          Colors.orange,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildStatCard(
+                          '$totalLogs',
+                          'Total Logs',
+                          Icons.assignment_turned_in_rounded,
+                          Colors.green,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatCard(
+                          '$onTargetPercentage%',
+                          'On Target',
+                          Icons.track_changes_rounded,
+                          Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildStatCard(
+                          '${avgSugar.toStringAsFixed(1)}g',
+                          'Avg Intake',
+                          Icons.trending_down_rounded,
+                          Colors.teal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Achievements Section
+            const Row(
+              children: [
+                Icon(Icons.emoji_events_rounded, color: Color(0xFF6A1B9A), size: 22),
+                SizedBox(width: 8),
+                Text(
+                  'Achievements',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2D1B47),
+                    letterSpacing: -0.3,
+                  ),
+                ),
               ],
             ),
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF6A1B9A).withOpacity(0.3),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.insights_rounded, color: Colors.white, size: 28),
-                  SizedBox(width: 12),
-                  Text(
-                    'Your Journey',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                      letterSpacing: -0.5,
-                    ),
+            const SizedBox(height: 12),
+            
+            _buildAchievementCard(
+              'First Week',
+              'Complete 7 days of logging',
+              Icons.celebration_rounded,
+              const Color(0xFFFFA726),
+              isUnlocked: streakDays >= 7,
+              progress: streakDays,
+              total: 7,
+            ),
+            const SizedBox(height: 12),
+            
+            _buildAchievementCard(
+              'Consistent Logger',
+              'Log sugar intake 30 days in a row',
+              Icons.auto_graph_rounded,
+              const Color(0xFF66BB6A),
+              isUnlocked: streakDays >= 30,
+              progress: streakDays,
+              total: 30,
+            ),
+            const SizedBox(height: 12),
+            
+            _buildAchievementCard(
+              'Sugar Tracker',
+              'Track 100 sugar logs',
+              Icons.track_changes_rounded,
+              const Color(0xFF42A5F5),
+              isUnlocked: totalLogs >= 100,
+              progress: totalLogs,
+              total: 100,
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Health Tips Based on Progress
+            const Row(
+              children: [
+                Icon(Icons.health_and_safety_rounded, color: Color(0xFF6A1B9A), size: 22),
+                SizedBox(width: 8),
+                Text(
+                  'Personalized Tips',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2D1B47),
+                    letterSpacing: -0.3,
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStatCard(
-                      '7',
-                      'Day Streak',
-                      Icons.local_fire_department_rounded,
-                      Colors.orange,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildStatCard(
-                      '24',
-                      'Total Logs',
-                      Icons.assignment_turned_in_rounded,
-                      Colors.green,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStatCard(
-                      '85%',
-                      'On Target',
-                      Icons.track_changes_rounded,
-                      Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildStatCard(
-                      '12g',
-                      'Avg Reduced',
-                      Icons.trending_down_rounded,
-                      Colors.teal,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        
-        const SizedBox(height: 24),
-        
-        // Achievements Section
-        const Row(
-          children: [
-            Icon(Icons.emoji_events_rounded, color: Color(0xFF6A1B9A), size: 22),
-            SizedBox(width: 8),
-            Text(
-              'Achievements',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF2D1B47),
-                letterSpacing: -0.3,
-              ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            
+            _buildTipCard(
+              'Great Progress!',
+              'You\'re consistently staying under your daily goal. Keep up the amazing work!',
+              Icons.thumb_up_rounded,
+              Colors.green,
+            ),
+            const SizedBox(height: 12),
+            
+            _buildTipCard(
+              'Weekend Challenge',
+              'Try planning your meals ahead for the weekend to maintain your streak.',
+              Icons.lightbulb_rounded,
+              Colors.orange,
+            ),
+            const SizedBox(height: 12),
+            
+            _buildTipCard(
+              'Hydration Reminder',
+              'Drinking water before meals can help reduce sugar cravings by up to 30%.',
+              Icons.water_drop_rounded,
+              Colors.blue,
             ),
           ],
-        ),
-        const SizedBox(height: 12),
-        
-        _buildAchievementCard(
-          'First Week',
-          'Complete 7 days of logging',
-          Icons.celebration_rounded,
-          const Color(0xFFFFA726),
-          isUnlocked: true,
-        ),
-        const SizedBox(height: 12),
-        
-        _buildAchievementCard(
-          'Consistent Logger',
-          'Log sugar intake 30 days in a row',
-          Icons.auto_graph_rounded,
-          const Color(0xFF66BB6A),
-          isUnlocked: false,
-          progress: 7,
-          total: 30,
-        ),
-        const SizedBox(height: 12),
-        
-        _buildAchievementCard(
-          'Sugar Tracker',
-          'Track 100 sugar logs',
-          Icons.track_changes_rounded,
-          const Color(0xFF42A5F5),
-          isUnlocked: false,
-          progress: 24,
-          total: 100,
-        ),
-        
-        const SizedBox(height: 24),
-        
-        // Health Tips Based on Progress
-        const Row(
-          children: [
-            Icon(Icons.health_and_safety_rounded, color: Color(0xFF6A1B9A), size: 22),
-            SizedBox(width: 8),
-            Text(
-              'Personalized Tips',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF2D1B47),
-                letterSpacing: -0.3,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        
-        _buildTipCard(
-          'Great Progress!',
-          'You\'re consistently staying under your daily goal. Keep up the amazing work!',
-          Icons.thumb_up_rounded,
-          Colors.green,
-        ),
-        const SizedBox(height: 12),
-        
-        _buildTipCard(
-          'Weekend Challenge',
-          'Try planning your meals ahead for the weekend to maintain your streak.',
-          Icons.lightbulb_rounded,
-          Colors.orange,
-        ),
-        const SizedBox(height: 12),
-        
-        _buildTipCard(
-          'Hydration Reminder',
-          'Drinking water before meals can help reduce sugar cravings by up to 30%.',
-          Icons.water_drop_rounded,
-          Colors.blue,
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -1730,12 +1998,15 @@ class _CommunityPageState extends State<CommunityPage> with SingleTickerProvider
         children: [
           Icon(icon, color: color, size: 32),
           const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF2D1B47),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF2D1B47),
+              ),
             ),
           ),
           const SizedBox(height: 4),

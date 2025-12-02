@@ -16,7 +16,9 @@ import 'data/models/local_sugar_log.dart';
 import 'data/models/local_user.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/sugar_log_repository.dart';
+import 'repositories/user_profile_repository.dart';
 import 'services/auth_helper.dart';
+import 'services/sync_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.logs});
@@ -35,6 +37,7 @@ class _HomePageState extends State<HomePage> {
   bool _isGuestMode = false;
   final AuthRepository _authRepository = AuthRepository();
   final SugarLogRepository _logRepository = SugarLogRepository();
+  final UserProfileRepository _profileRepository = UserProfileRepository();
   LocalUser? _localUser;
   int? _highlightedBarIndex;
 
@@ -81,36 +84,34 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadUserProfile() async {
-    if (_isGuestMode) {
-      final user = await _ensureLocalUser();
-      if (!mounted) return;
-      setState(() {
-        _fullName = user?.fullName ?? 'Guest Explorer';
-        _dailyGoal = user?.dailySugarGoal ?? _dailyGoal;
-      });
-      return;
-    }
-    final token = await _getToken();
-    if (token == null) return;
-
+    final user = await _ensureLocalUser();
+    if (user?.id == null) return;
+    
+    // Use repository for all users (guest and online) to ensure consistency
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/users/me/profile'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+      final profile = await _profileRepository.fetchProfile(user!.id!);
+      if (profile != null && mounted) {
+        setState(() {
+          _fullName = profile.fullName;
+          _dailyGoal = profile.dailySugarGoal;
+        });
+      } else {
+        // Fallback to local user data if no profile exists yet
         if (!mounted) return;
         setState(() {
-          _fullName = data['fullName'] ?? "User";
-          _dailyGoal = data['dailySugarGoal'] ?? 75;
+          _fullName = user.fullName;
+          _dailyGoal = user.dailySugarGoal ?? _dailyGoal;
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Error loading profile: $e');
+      // Fallback to local user data
+      if (!mounted) return;
+      setState(() {
+        _fullName = user!.fullName;
+        _dailyGoal = user.dailySugarGoal ?? _dailyGoal;
+      });
+    }
   }
 
   Future<void> _loadUserStreak() async {
@@ -238,41 +239,37 @@ class _HomePageState extends State<HomePage> {
                 final parsed = int.tryParse(controller.text);
                 if (parsed != null && parsed > 0) {
                   newGoal = parsed;
-                  if (_isGuestMode) {
-                    final user = await _ensureLocalUser();
-                    if (user?.email == null) return;
-                    await _authRepository.persistUserProfile(
-                      email: user!.email,
-                      fullName: user.fullName,
-                      role: user.role,
-                      provider: user.authProvider,
-                      goal: newGoal,
-                      biometricEnabled: user.biometricEnabled,
-                      allowPartnerRequests: user.allowPartnerRequests,
-                      featureFlags: user.featureFlags,
+                  
+                  // Use local-first pattern for all users (guest and online)
+                  final user = await _ensureLocalUser();
+                  if (user?.id == null) {
+                    await _showFlushBar(
+                      message: "Unable to update goal. Please try again.",
+                      color: Colors.red,
+                      icon: Icons.error,
                     );
-                    if (!mounted) return;
-                    setState(() => _dailyGoal = newGoal!);
-                    Navigator.pop(ctx);
+                    return;
+                  }
+                  
+                  // Use repository for both guest and online users
+                  // For guests: saves locally only (no sync)
+                  // For online users: syncs to backend or saves as dirty if offline
+                  final synced = await _profileRepository.updateDailyGoal(user!.id!, newGoal!);
+                  
+                  if (!mounted) return;
+                  setState(() => _dailyGoal = newGoal!);
+                  Navigator.pop(ctx);
+                  
+                  if (_isGuestMode) {
+                    // Guest mode: always saved locally
                     await _showFlushBar(
                       message: "Daily goal updated!",
                       color: Colors.green,
                       icon: Icons.check_circle,
                     );
-                    return;
-                  }
-                  final token = await _getToken();
-                  if (token != null) {
-                    final url = Uri.parse('$baseUrl/api/users/me/goal');
-                    final resp = await http.patch(url,
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': 'Bearer $token',
-                        },
-                        body: jsonEncode({'goal': newGoal}));
-                    if (resp.statusCode == 200) {
-                      setState(() => _dailyGoal = newGoal!);
-                      Navigator.pop(ctx);
+                  } else {
+                    // Online mode: show sync status
+                    if (synced) {
                       await _showFlushBar(
                         message: "Daily goal updated!",
                         color: Colors.green,
@@ -280,9 +277,9 @@ class _HomePageState extends State<HomePage> {
                       );
                     } else {
                       await _showFlushBar(
-                        message: "Failed to update goal: ${resp.body}",
-                        color: Colors.red,
-                        icon: Icons.error,
+                        message: "Goal saved offline. Will sync when online.",
+                        color: AppTheme.infoBlue,
+                        icon: Icons.cloud_off,
                       );
                     }
                   }
@@ -298,13 +295,9 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _fetchLogs() async {
     setState(() => _loading = true);
-    if (_isGuestMode) {
-      await _fetchLocalLogs();
-      setState(() => _loading = false);
-      return;
-    }
-    final token = await _getToken();
-    if (token == null) {
+    // Always use repository for offline-first behavior
+    final user = await _ensureLocalUser();
+    if (user?.id == null) {
       setState(() => _loading = false);
       await _showFlushBar(
         message: 'Not logged in. Please login again.',
@@ -313,34 +306,57 @@ class _HomePageState extends State<HomePage> {
       );
       return;
     }
+    
     try {
-      final url = Uri.parse('$baseUrl/api/sugarlogs');
-      final response = await http.get(url, headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      });
-      if (response.statusCode == 200) {
-        final List data = jsonDecode(response.body);
-        setState(() {
-          _logs = data.map((e) => SugarLog.fromJson(e)).toList();
-        });
-      } else {
-        // If the backend returns a non-success status (e.g. 404/500),
-        // gracefully show an empty list without spamming the UI.
-        debugPrint(
-            'Sugar log fetch returned ${response.statusCode}: ${response.body}');
-        setState(() => _logs = []);
+      if (!_isGuestMode) {
+        // Check for dirty logs and dirty profile changes
+        final dirtyLogs = await _logRepository.fetchDirtyLogs(user!.id!);
+        final dirtyProfile = await _profileRepository.fetchDirtyProfile(user.id!);
+        final hasDirtyData = dirtyLogs.isNotEmpty || dirtyProfile != null;
+        
+        if (hasDirtyData) {
+          // Show sync starting notification
+          final changeCount = dirtyLogs.length + (dirtyProfile != null ? 1 : 0);
+          _showFlushBar(
+            message: 'Syncing $changeCount change${changeCount == 1 ? '' : 's'}...',
+            color: AppTheme.infoBlue,
+            icon: Icons.sync,
+            duration: const Duration(seconds: 2),
+          );
+          
+          // Sync all pending changes (logs and profile)
+          await SyncService.instance.syncPendingLogs(user.id!);
+          
+          // Show completion notification
+          _showFlushBar(
+            message: 'Sync complete! ✓',
+            color: AppTheme.successGreen,
+            icon: Icons.check_circle,
+            duration: const Duration(seconds: 2),
+          );
+        }
       }
+      
+      // Repository handles fetching from server and caching
+      // Falls back to local DB if offline
+      final localLogs = await _logRepository.fetchLogs(userId: user!.id!);
+      if (!mounted) return;
+      setState(() {
+        _logs = localLogs.map(_mapLocalLog).toList();
+      });
     } catch (e) {
-      // Network/parse errors should not break the screen either.
-      debugPrint('Sugar log fetch failed: $e');
-      setState(() => _logs = []);
+      debugPrint('Error fetching logs: $e');
+      // Don't clear logs on error - keep showing what we have
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   void _showRegisterModal({SugarLog? editLog}) async {
+    final isCreate = editLog == null;
+    
     await showDialog(
       context: context,
       builder: (context) => SugarLogCreationDialog(
@@ -356,8 +372,35 @@ class _HomePageState extends State<HomePage> {
         },
       ),
     );
+    
     // Refresh data after dialog closes
-    await _fetchLogs();
+    // For immediate UI update, read from local cache first
+    final user = await _ensureLocalUser();
+    if (user?.id != null) {
+      try {
+        // Fetch from local cache immediately to show local changes
+        final localLogs = await _logRepository.fetchLogs(
+          userId: user!.id!,
+          forceOffline: true, // Don't fetch from server yet
+        );
+        if (mounted) {
+          setState(() {
+            _logs = localLogs.map(_mapLocalLog).toList();
+          });
+        }
+      } catch (e) {
+        debugPrint('Error loading local logs: $e');
+      }
+    }
+    
+    // For create operations, wait a bit before syncing with server
+    // This prevents race condition where server fetch happens before POST completes
+    if (isCreate) {
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+    
+    // Then refresh from server in the background (will sync any changes)
+    _fetchLogs();
     _loadUserStreak();
   }
 
@@ -466,10 +509,10 @@ class _HomePageState extends State<HomePage> {
             child: IconButton(
               icon: Icon(Icons.refresh_rounded, color: AppTheme.primaryPurple),
               iconSize: 22,
-              onPressed: () {
-                _fetchLogs();
-                _loadUserStreak();
-                _loadUserProfile();
+              onPressed: () async {
+                await _fetchLogs();
+                await _loadUserProfile();
+                await _loadUserStreak();
               },
               tooltip: "Refresh",
             ),

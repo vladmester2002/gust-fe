@@ -21,7 +21,7 @@ class GustTextField extends StatefulWidget {
   final String? semanticLabel;
 
   const GustTextField({
-    Key? key,
+    super.key,
     required this.controller,
     required this.label,
     this.hint,
@@ -38,7 +38,7 @@ class GustTextField extends StatefulWidget {
     this.onChanged,
     this.autofillHints,
     this.semanticLabel,
-  }) : super(key: key);
+  });
   @override
   State<GustTextField> createState() => _GustTextFieldState();
 }
@@ -60,9 +60,9 @@ class _GustTextFieldState extends State<GustTextField> {
     final Color fill = widget.enabled
         ? (idt.fillColor ?? AppTheme.cardWhite)
         : AppTheme.backgroundGrey;
-    final TextStyle? labelStyle = idt.labelStyle ?? TextStyle(color: AppTheme.textSecondary, fontSize: 16);
-    final TextStyle? hintStyle = idt.hintStyle ?? TextStyle(color: AppTheme.textSecondary.withOpacity(0.6), fontSize: 14);
-    final TextStyle? errorStyle = idt.errorStyle ?? TextStyle(color: AppTheme.errorRed, fontSize: 12);
+    final TextStyle labelStyle = idt.labelStyle ?? const TextStyle(color: AppTheme.textSecondary, fontSize: 16);
+    final TextStyle hintStyle = idt.hintStyle ?? TextStyle(color: AppTheme.textSecondary.withOpacity(0.6), fontSize: 14);
+    final TextStyle errorStyle = idt.errorStyle ?? const TextStyle(color: AppTheme.errorRed, fontSize: 12);
 
     return Semantics(
       label: widget.semanticLabel,
@@ -72,6 +72,7 @@ class _GustTextFieldState extends State<GustTextField> {
         obscureText: _obscure,
         keyboardType: widget.keyboardType,
         validator: widget.validator,
+
         enabled: widget.enabled,
         maxLines: widget.obscureText ? 1 : widget.maxLines,
         textInputAction: widget.textInputAction,
@@ -110,12 +111,12 @@ class _GustTextFieldState extends State<GustTextField> {
                   : null),
           filled: true,
           fillColor: fill,
-          contentPadding: EdgeInsets.symmetric(horizontal: AppTheme.spaceMD, vertical: AppTheme.spaceMD),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium), borderSide: BorderSide(color: AppTheme.dividerGrey, width: 1)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium), borderSide: BorderSide(color: AppTheme.dividerGrey, width: 1)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: AppTheme.spaceMD, vertical: AppTheme.spaceMD),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium), borderSide: const BorderSide(color: AppTheme.dividerGrey, width: 1)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium), borderSide: const BorderSide(color: AppTheme.dividerGrey, width: 1)),
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium), borderSide: BorderSide(color: theme.colorScheme.primary, width: 2)),
-          errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium), borderSide: BorderSide(color: AppTheme.errorRed, width: 1)),
-          focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium), borderSide: BorderSide(color: AppTheme.errorRed, width: 2)),
+          errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium), borderSide: const BorderSide(color: AppTheme.errorRed, width: 1)),
+          focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium), borderSide: const BorderSide(color: AppTheme.errorRed, width: 2)),
           labelStyle: labelStyle,
           hintStyle: hintStyle,
           errorStyle: errorStyle,

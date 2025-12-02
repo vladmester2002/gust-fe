@@ -5,15 +5,15 @@ typedef VoidCallbackAsync = Future<void> Function();
 
 class AuthProviderButtons extends StatelessWidget {
   final VoidCallback? onGoogle;
-  final VoidCallback? onFacebook;
+  final VoidCallback? onYahoo;
   final VoidCallback? onAnonymous;
 
   const AuthProviderButtons({
-    Key? key,
+    super.key,
     this.onGoogle,
-    this.onFacebook,
+    this.onYahoo,
     this.onAnonymous,
-  }) : super(key: key);
+  });
 
   Widget _googleLogo() {
     // Simple branded circle with a 'G' to indicate Google sign-in.
@@ -26,7 +26,7 @@ class AuthProviderButtons extends StatelessWidget {
         border: Border.all(color: AppTheme.dividerGrey, width: 0.5),
       ),
       alignment: Alignment.center,
-      child: Text(
+      child: const Text(
         'G',
         style: TextStyle(
           color: Color(0xFF4285F4),
@@ -36,22 +36,21 @@ class AuthProviderButtons extends StatelessWidget {
     );
   }
 
-  Widget _facebookLogo() {
+  Widget _yahooLogo() {
     return Container(
       width: 28,
       height: 28,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         shape: BoxShape.circle,
-        color: const Color(0xFF1877F2),
+        color: Color(0xFF6001D2),
       ),
       alignment: Alignment.center,
-      child: Text(
-        'f',
+      child: const Text(
+        'Y',
         style: TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w900,
-          fontSize: 20,
-          fontFamily: 'serif',
+          fontSize: 16,
         ),
       ),
     );
@@ -63,30 +62,41 @@ class AuthProviderButtons extends StatelessWidget {
       children: [
         // Google Sign In
         if (onGoogle != null)
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: AppTheme.spaceSM),
-            child: OutlinedButton(
+          Semantics(
+            label: 'Sign in with Google button',
+            hint: 'Double tap to sign in using your Google account',
+            button: true,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppTheme.spaceSM),
+              child: OutlinedButton(
               style: OutlinedButton.styleFrom(
                 backgroundColor: Colors.white,
-                side: BorderSide(color: AppTheme.dividerGrey),
-                padding: EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium)),
+                side: const BorderSide(color: AppTheme.dividerGrey),
+                padding: const EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMedium)),
               ),
               onPressed: onGoogle,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _googleLogo(),
-                  SizedBox(width: AppTheme.spaceSM),
-                  Text('Sign in with Google', style: TextStyle(color: AppTheme.textPrimary, fontSize: 15)),
+                  const SizedBox(width: AppTheme.spaceSM),
+                  const Text('Sign in with Google',
+                      style:
+                          TextStyle(color: AppTheme.textPrimary, fontSize: 15)),
                 ],
               ),
             ),
-          ),
+          )),
 
-        // Facebook Sign In
-        if (onFacebook != null)
-          Padding(
+        // Yahoo Sign In
+        if (onYahoo != null)
+          Semantics(
+            label: 'Sign in with Yahoo button',
+            hint: 'Double tap to sign in using your Yahoo account',
+            button: true,
+            child: Padding(
             padding: EdgeInsets.only(
               left: AppTheme.spaceSM,
               right: AppTheme.spaceSM,
@@ -94,26 +104,31 @@ class AuthProviderButtons extends StatelessWidget {
             ),
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
-                backgroundColor: const Color(0xFF1877F2),
+                backgroundColor: const Color(0xFF6001D2),
                 side: BorderSide.none,
-                padding: EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium)),
+                padding: const EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMedium)),
               ),
-              onPressed: onFacebook,
+              onPressed: onYahoo,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _facebookLogo(),
-                  SizedBox(width: AppTheme.spaceSM),
-                  Text('Sign in with Facebook', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                  _yahooLogo(),
+                  const SizedBox(width: AppTheme.spaceSM),
+                  const Text('Sign in with Yahoo',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
-          ),
+          )),
 
         // Divider
-        if (onGoogle != null || onFacebook != null) ...[
-          Padding(
+        if (onGoogle != null || onYahoo != null) ...[
+          const Padding(
             padding: EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
             child: Row(
               children: [
@@ -143,13 +158,18 @@ class AuthProviderButtons extends StatelessWidget {
 
   Widget buildAnonymousButton() {
     if (onAnonymous == null) return const SizedBox.shrink();
-    
-    return Padding(
-      padding: EdgeInsets.only(top: AppTheme.spaceMD),
+
+    return Semantics(
+      label: 'Continue as guest button',
+      hint: 'Double tap to continue without creating an account',
+      button: true,
+      child: Padding(
+      padding: const EdgeInsets.only(top: AppTheme.spaceMD),
       child: TextButton.icon(
         onPressed: onAnonymous,
-        icon: Icon(Icons.person_outline, color: AppTheme.textSecondary, size: 20),
-        label: Text(
+        icon:
+            const Icon(Icons.person_outline, color: AppTheme.textSecondary, size: 20),
+        label: const Text(
           'Continue as Guest',
           style: TextStyle(
             color: AppTheme.textSecondary,
@@ -158,6 +178,6 @@ class AuthProviderButtons extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ));
   }
 }

@@ -28,6 +28,10 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   void dispose() {
+    _usernameController.clear();
+    _emailController.clear();
+    _passwordController.clear();
+    _confirmPasswordController.clear();
     _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();

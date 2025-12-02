@@ -142,77 +142,6 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
     );
   }
 
-  Future<void> _createLocalLog() async {
-    final user = await _ensureLocalUser();
-    if (user?.id == null) {
-      await _showFlushBar(
-        message: 'Guest profile not initialized. Please restart the app.',
-        color: Colors.red,
-        icon: Icons.error,
-      );
-      return;
-    }
-    final localLog = _buildLocalSugarLog(user!.id!);
-    final newId = await _logRepository.addLog(localLog);
-    final saved = localLog.copyWith(id: newId);
-    if (mounted) {
-      Navigator.pop(context);
-      widget.onCreated(_mapLocalToSugarLog(saved));
-    }
-    await _showFlushBar(
-      message: 'Sugar log added!',
-      color: Colors.green,
-      icon: Icons.check_circle,
-    );
-  }
-
-  Future<void> _updateLocalLog() async {
-    if (widget.existingLog == null) return;
-    final user = await _ensureLocalUser();
-    if (user?.id == null) {
-      await _showFlushBar(
-        message: 'Guest profile not initialized. Please restart the app.',
-        color: Colors.red,
-        icon: Icons.error,
-      );
-      return;
-    }
-    final localLog =
-        _buildLocalSugarLog(user!.id!, id: widget.existingLog!.id);
-    await _logRepository.updateLog(localLog);
-    if (mounted) {
-      Navigator.pop(context);
-      widget.onUpdated?.call(_mapLocalToSugarLog(localLog));
-    }
-    await _showFlushBar(
-      message: 'Sugar log updated!',
-      color: Colors.green,
-      icon: Icons.check_circle,
-    );
-  }
-
-  Future<void> _deleteLocalLog() async {
-    if (widget.existingLog == null) return;
-    final user = await _ensureLocalUser();
-    if (user?.id == null) {
-      await _showFlushBar(
-        message: 'Guest profile not initialized. Please restart the app.',
-        color: Colors.red,
-        icon: Icons.error,
-      );
-      return;
-    }
-    await _logRepository.deleteLog(widget.existingLog!.id, user!.id!);
-    if (mounted) {
-      Navigator.pop(context);
-      widget.onDeleted?.call(widget.existingLog!);
-    }
-    await _showFlushBar(
-      message: 'Sugar log deleted!',
-      color: Colors.green,
-      icon: Icons.delete,
-    );
-  }
 
   Future<void> _showFlushBar({
     required String message,
@@ -237,12 +166,9 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
     if (!mounted) return;
     setState(() => _loading = true);
     try {
-      if (_isGuestMode) {
-        await _createLocalLog();
-        return;
-      }
-      final token = await _getToken();
-      if (token == null) {
+      // Always use repository for offline-first behavior
+      final user = await _ensureLocalUser();
+      if (user?.id == null) {
         if (mounted) {
           await _showFlushBar(
             message: 'Not logged in. Please login again.',
@@ -253,43 +179,24 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
         }
         return;
       }
-      // Don't override selectedDate, it is always today
-      final url = Uri.parse('$baseUrl/api/sugarlogs');
-      final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(_buildLogData()),
-      );
-      if (!mounted) return;
       
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final log = SugarLog.fromJson(jsonDecode(response.body));
-        if (mounted) {
-          Navigator.pop(context);
-          // Call callback after dialog is closed
-          widget.onCreated(log);
-        }
-        await _showFlushBar(
-          message: 'Sugar log added!',
-          color: Colors.green,
-          icon: Icons.check_circle,
-        );
-      } else {
-        if (mounted) {
-          await _showFlushBar(
-            message: 'Failed to add log: ${response.body}',
-            color: Colors.red,
-            icon: Icons.error,
-          );
-        }
+      final localLog = _buildLocalSugarLog(user!.id!);
+      final newId = await _logRepository.addLog(localLog);
+      final saved = localLog.copyWith(id: newId);
+      
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onCreated(_mapLocalToSugarLog(saved));
       }
+      await _showFlushBar(
+        message: 'Sugar log added!',
+        color: Colors.green,
+        icon: Icons.check_circle,
+      );
     } catch (e) {
       if (mounted) {
         await _showFlushBar(
-          message: 'Network error: $e',
+          message: 'Failed to add log: $e',
           color: Colors.red,
           icon: Icons.error,
         );
@@ -305,12 +212,9 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
     if (widget.existingLog == null || !mounted) return;
     setState(() => _loading = true);
     try {
-      if (_isGuestMode) {
-        await _updateLocalLog();
-        return;
-      }
-      final token = await _getToken();
-      if (token == null) {
+      // Get user first
+      final user = await _ensureLocalUser();
+      if (user?.id == null) {
         if (mounted) {
           await _showFlushBar(
             message: 'Not logged in. Please login again.',
@@ -321,41 +225,45 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
         }
         return;
       }
-      final url = Uri.parse('$baseUrl/api/sugarlogs/${widget.existingLog!.id}');
-      final response = await http.put(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(_buildLogData()),
-      );
-      if (!mounted) return;
       
-      if (response.statusCode == 200) {
-        final log = SugarLog.fromJson(jsonDecode(response.body));
-        if (mounted) {
-          Navigator.pop(context);
-          widget.onUpdated?.call(log);
-        }
-        await _showFlushBar(
-          message: 'Sugar log updated!',
-          color: Colors.green,
-          icon: Icons.check_circle,
+      // Try to find the existing log in the database
+      // widget.existingLog.id could be either local ID or remote ID
+      // Always fetch from local cache to avoid server overwriting local changes
+      final allLogs = await _logRepository.fetchLogs(userId: user!.id!, forceOffline: true);
+      LocalSugarLog? existingLocal;
+      
+      try {
+        existingLocal = allLogs.firstWhere(
+          (log) => log.id == widget.existingLog!.id || log.remoteId == widget.existingLog!.id,
         );
-      } else {
-        if (mounted) {
-          await _showFlushBar(
-            message: 'Failed to update log: ${response.body}',
-            color: Colors.red,
-            icon: Icons.error,
-          );
-        }
+      } catch (e) {
+        // If not found, assume widget.existingLog.id is the local ID
+        print('Could not find log in database, using existingLog.id as local ID');
       }
+      
+      // Build updated log with proper IDs
+      final updatedLog = _buildLocalSugarLog(
+        user.id!, 
+        id: existingLocal?.id ?? widget.existingLog!.id,
+      ).copyWith(
+        remoteId: existingLocal?.remoteId,
+      );
+      
+      await _logRepository.updateLog(updatedLog);
+      
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onUpdated?.call(_mapLocalToSugarLog(updatedLog));
+      }
+      await _showFlushBar(
+        message: 'Sugar log updated!',
+        color: Colors.green,
+        icon: Icons.check_circle,
+      );
     } catch (e) {
       if (mounted) {
         await _showFlushBar(
-          message: 'Network error: $e',
+          message: 'Failed to update log: $e',
           color: Colors.red,
           icon: Icons.error,
         );
@@ -371,12 +279,9 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
     if (widget.existingLog == null || !mounted) return;
     setState(() => _loading = true);
     try {
-      if (_isGuestMode) {
-        await _deleteLocalLog();
-        return;
-      }
-      final token = await _getToken();
-      if (token == null) {
+      // Get user first
+      final user = await _ensureLocalUser();
+      if (user?.id == null) {
         if (mounted) {
           await _showFlushBar(
             message: 'Not logged in. Please login again.',
@@ -387,38 +292,39 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
         }
         return;
       }
-      final url = Uri.parse('$baseUrl/api/sugarlogs/${widget.existingLog!.id}');
-      final response = await http.delete(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
-      );
-      if (!mounted) return;
       
-      if (response.statusCode == 204) {
-        if (mounted) {
-          Navigator.pop(context);
-          widget.onDeleted?.call(widget.existingLog!);
-        }
-        await _showFlushBar(
-          message: 'Sugar log deleted!',
-          color: Colors.green,
-          icon: Icons.delete,
+      // Try to find the existing log in the database
+      // widget.existingLog.id could be either local ID or remote ID
+      // Always fetch from local cache to avoid server overwriting local changes
+      final allLogs = await _logRepository.fetchLogs(userId: user!.id!, forceOffline: true);
+      int? localIdToDelete = widget.existingLog!.id;
+      
+      try {
+        final existingLocal = allLogs.firstWhere(
+          (log) => log.id == widget.existingLog!.id || log.remoteId == widget.existingLog!.id,
         );
-      } else {
-        if (mounted) {
-          await _showFlushBar(
-            message: 'Failed to delete log: ${response.body}',
-            color: Colors.red,
-            icon: Icons.error,
-          );
-        }
+        localIdToDelete = existingLocal.id;
+      } catch (e) {
+        // If not found, assume widget.existingLog.id is the local ID
+        print('Could not find log in database, using existingLog.id as local ID');
       }
+      
+      // Delete using the correct local ID
+      await _logRepository.deleteLog(localIdToDelete!, user.id!);
+      
+      if (mounted) {
+        Navigator.pop(context);
+        widget.onDeleted?.call(widget.existingLog!);
+      }
+      await _showFlushBar(
+        message: 'Sugar log deleted!',
+        color: Colors.green,
+        icon: Icons.delete,
+      );
     } catch (e) {
       if (mounted) {
         await _showFlushBar(
-          message: 'Network error: $e',
+          message: 'Failed to delete log: $e',
           color: Colors.red,
           icon: Icons.error,
         );
@@ -436,7 +342,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      insetPadding: EdgeInsets.all(AppTheme.spaceMD),
+      insetPadding: const EdgeInsets.all(AppTheme.spaceMD),
       child: Container(
         constraints: const BoxConstraints(maxWidth: 420),
         decoration: BoxDecoration(
@@ -446,7 +352,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
             BoxShadow(
               color: AppTheme.primaryPurple.withOpacity(0.2),
               blurRadius: 30,
-              offset: Offset(0, 15),
+              offset: const Offset(0, 15),
             ),
           ],
         ),
@@ -455,8 +361,8 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
           children: [
             // Stunning Gradient Header
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              decoration: BoxDecoration(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -474,7 +380,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
               child: Row(
                 children: [
                   Container(
-                    padding: EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
@@ -485,7 +391,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                       size: 28,
                     ),
                   ),
-                  SizedBox(width: 16),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -499,7 +405,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                             letterSpacing: -0.5,
                           ),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
                           isEdit ? "Update your entry" : "Track your sugar intake",
                           style: TextStyle(
@@ -522,7 +428,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
             // Content
             Flexible(
               child: SingleChildScrollView(
-                padding: EdgeInsets.all(AppTheme.spaceLG),
+                padding: const EdgeInsets.all(AppTheme.spaceLG),
                 child: StatefulBuilder(
                   builder: (context, setState) {
                     return Form(
@@ -548,8 +454,8 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
-                              SizedBox(width: 10),
-                              Text(
+                              const SizedBox(width: 10),
+                              const Text(
                                 "Essential Information",
                                 style: TextStyle(
                                   fontSize: 15,
@@ -558,14 +464,14 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                   letterSpacing: -0.3,
                                 ),
                               ),
-                              SizedBox(width: 6),
+                              const SizedBox(width: 6),
                               Container(
-                                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: AppTheme.errorRed.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: Text(
+                                child: const Text(
                                   "REQUIRED",
                                   style: TextStyle(
                                     fontSize: 9,
@@ -577,7 +483,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                               ),
                             ],
                           ),
-                          SizedBox(height: 14),
+                          const SizedBox(height: 14),
                           
                           // Sugar Amount Field (prominent)
                           GustTextField(
@@ -585,9 +491,15 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                             label: "Sugar Amount (grams)",
                             prefixIcon: Icons.water_drop_rounded,
                             keyboardType: TextInputType.number,
-                            validator: (v) => v == null || v.isEmpty ? "Required" : null,
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return "Required";
+                              final n = int.tryParse(v);
+                              if (n == null) return "Invalid number";
+                              if (n > 999) return "Max 999g";
+                              return null;
+                            },
                           ),
-                          SizedBox(height: 12),
+                          const SizedBox(height: 12),
                           
                           // Product Name Field
                           GustTextField(
@@ -596,7 +508,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                             prefixIcon: Icons.restaurant_menu_rounded,
                             validator: (v) => v == null || v.isEmpty ? "Required" : null,
                           ),
-                          SizedBox(height: 20),
+                          const SizedBox(height: 20),
                           
                           // Optional Details Section
                           Row(
@@ -609,8 +521,8 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
-                              SizedBox(width: 10),
-                              Text(
+                              const SizedBox(width: 10),
+                              const Text(
                                 "Additional Details",
                                 style: TextStyle(
                                   fontSize: 15,
@@ -619,8 +531,8 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                   letterSpacing: -0.3,
                                 ),
                               ),
-                              SizedBox(width: 6),
-                              Text(
+                              const SizedBox(width: 6),
+                              const Text(
                                 "Optional",
                                 style: TextStyle(
                                   fontSize: 11,
@@ -631,7 +543,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                               ),
                             ],
                           ),
-                          SizedBox(height: 14),
+                          const SizedBox(height: 14),
                           
                           // Context Note Field
                           GustTextField(
@@ -641,7 +553,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                             prefixIcon: Icons.edit_note_rounded,
                             maxLines: 2,
                           ),
-                          SizedBox(height: 20),
+                          const SizedBox(height: 20),
                           
                           // When Section Header
                           Row(
@@ -661,8 +573,8 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
-                              SizedBox(width: 10),
-                              Text(
+                              const SizedBox(width: 10),
+                              const Text(
                                 "When",
                                 style: TextStyle(
                                   fontSize: 15,
@@ -673,7 +585,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                               ),
                             ],
                           ),
-                          SizedBox(height: 14),
+                          const SizedBox(height: 14),
                           
                           // Date & Time Row (stunning design)
                           Row(
@@ -681,7 +593,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                               // Date - Today indicator
                               Expanded(
                                 child: Container(
-                                  padding: EdgeInsets.all(14),
+                                  padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
                                     color: AppTheme.successGreen.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(14),
@@ -693,7 +605,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Row(
+                                      const Row(
                                         children: [
                                           Icon(Icons.calendar_today_rounded, 
                                             color: AppTheme.successGreen, 
@@ -711,8 +623,8 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                           ),
                                         ],
                                       ),
-                                      SizedBox(height: 8),
-                                      Text(
+                                      const SizedBox(height: 8),
+                                      const Text(
                                         "Today",
                                         style: TextStyle(
                                           fontSize: 17,
@@ -721,7 +633,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                           height: 1,
                                         ),
                                       ),
-                                      SizedBox(height: 2),
+                                      const SizedBox(height: 2),
                                       Text(
                                         DateFormat('MMMM d, yyyy').format(selectedDate),
                                         style: TextStyle(
@@ -734,7 +646,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                   ),
                                 ),
                               ),
-                              SizedBox(width: 12),
+                              const SizedBox(width: 12),
                               // Time - Interactive selector
                               Expanded(
                                 child: InkWell(
@@ -749,7 +661,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                   },
                                   borderRadius: BorderRadius.circular(14),
                                   child: Container(
-                                    padding: EdgeInsets.all(14),
+                                    padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
                                         colors: [
@@ -766,7 +678,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Row(
+                                        const Row(
                                           children: [
                                             Icon(Icons.access_time_rounded, 
                                               color: AppTheme.primaryPurple, 
@@ -784,24 +696,24 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                             ),
                                           ],
                                         ),
-                                        SizedBox(height: 8),
+                                        const SizedBox(height: 8),
                                         Text(
                                           selectedTime.format(context),
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             fontSize: 17,
                                             color: AppTheme.primaryPurple,
                                             fontWeight: FontWeight.w900,
                                             height: 1,
                                           ),
                                         ),
-                                        SizedBox(height: 2),
+                                        const SizedBox(height: 2),
                                         Row(
                                           children: [
                                             Icon(Icons.touch_app_rounded, 
                                               size: 10, 
                                               color: AppTheme.primaryPurple.withOpacity(0.7),
                                             ),
-                                            SizedBox(width: 4),
+                                            const SizedBox(width: 4),
                                             Text(
                                               "Tap to change",
                                               style: TextStyle(
@@ -819,7 +731,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                               ),
                             ],
                           ),
-                          SizedBox(height: 20),
+                          const SizedBox(height: 20),
                           
                           // How You Felt Section
                           Row(
@@ -839,8 +751,8 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
-                              SizedBox(width: 10),
-                              Text(
+                              const SizedBox(width: 10),
+                              const Text(
                                 "How You Felt",
                                 style: TextStyle(
                                   fontSize: 15,
@@ -851,7 +763,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                               ),
                             ],
                           ),
-                          SizedBox(height: 14),
+                          const SizedBox(height: 14),
                           
                           // How You Felt - Emotion Selector (Fixed height to prevent movement)
                           Container(
@@ -863,12 +775,12 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                 width: 1,
                               ),
                             ),
-                            padding: EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(16),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Row(
+                                const Row(
                                   children: [
                                     Icon(Icons.mood_rounded, 
                                       size: 18, 
@@ -885,7 +797,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                     ),
                                   ],
                                 ),
-                                SizedBox(height: 12),
+                                const SizedBox(height: 12),
                                 // Fixed height container to prevent layout shifts
                                 SizedBox(
                                   child: Wrap(
@@ -897,8 +809,8 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                         onTap: () => setState(() => selectedEmotion = emotion),
                                         borderRadius: BorderRadius.circular(24),
                                         child: AnimatedContainer(
-                                          duration: Duration(milliseconds: 200),
-                                          padding: EdgeInsets.symmetric(
+                                          duration: const Duration(milliseconds: 200),
+                                          padding: const EdgeInsets.symmetric(
                                             horizontal: 16,
                                             vertical: 10,
                                           ),
@@ -925,7 +837,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                               BoxShadow(
                                                 color: emotion.color.withOpacity(0.3),
                                                 blurRadius: 8,
-                                                offset: Offset(0, 2),
+                                                offset: const Offset(0, 2),
                                               ),
                                             ] : null,
                                           ),
@@ -934,9 +846,9 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                             children: [
                                               Text(
                                                 emotion.emoji,
-                                                style: TextStyle(fontSize: 16),
+                                                style: const TextStyle(fontSize: 16),
                                               ),
-                                              SizedBox(width: 6),
+                                              const SizedBox(width: 6),
                                               Text(
                                                 emotion.label,
                                                 style: TextStyle(
@@ -958,15 +870,15 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                             ),
                           ),
                           
-                          SizedBox(height: 12),
+                          const SizedBox(height: 12),
                           
                           // Craving Toggle - Stunning Design
                           InkWell(
                             onTap: () => setState(() => wasCraving = !wasCraving),
                             borderRadius: BorderRadius.circular(16),
                             child: AnimatedContainer(
-                              duration: Duration(milliseconds: 200),
-                              padding: EdgeInsets.all(16),
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 gradient: wasCraving 
                                     ? LinearGradient(
@@ -990,14 +902,14 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                   BoxShadow(
                                     color: AppTheme.warningOrange.withOpacity(0.3),
                                     blurRadius: 12,
-                                    offset: Offset(0, 4),
+                                    offset: const Offset(0, 4),
                                   ),
                                 ] : null,
                               ),
                               child: Row(
                                 children: [
                                   Container(
-                                    padding: EdgeInsets.all(8),
+                                    padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
                                       color: wasCraving 
                                           ? Colors.white.withOpacity(0.2)
@@ -1012,7 +924,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                       size: 24,
                                     ),
                                   ),
-                                  SizedBox(width: 12),
+                                  const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1027,7 +939,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                                 : AppTheme.textPrimary,
                                           ),
                                         ),
-                                        SizedBox(height: 2),
+                                        const SizedBox(height: 2),
                                         Text(
                                           wasCraving 
                                               ? "Yes, I was craving it" 
@@ -1059,7 +971,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                       ),
                                     ),
                                     child: wasCraving 
-                                        ? Icon(Icons.check_rounded, 
+                                        ? const Icon(Icons.check_rounded, 
                                             size: 18, 
                                             color: AppTheme.warningOrange,
                                           )
@@ -1079,7 +991,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
             
             // Actions Footer
             Container(
-              padding: EdgeInsets.all(AppTheme.spaceLG),
+              padding: const EdgeInsets.all(AppTheme.spaceLG),
               decoration: BoxDecoration(
                 color: Colors.white,
                 border: Border(
@@ -1088,7 +1000,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                     width: 1,
                   ),
                 ),
-                borderRadius: BorderRadius.only(
+                borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(AppTheme.radiusLarge),
                   bottomRight: Radius.circular(AppTheme.radiusLarge),
                 ),
@@ -1112,7 +1024,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                             icon: Icons.check_circle,
                           ),
                         ),
-                        SizedBox(height: AppTheme.spaceSM),
+                        const SizedBox(height: AppTheme.spaceSM),
                         // Cancel and Delete row
                         Row(
                           children: [
@@ -1123,7 +1035,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                                 type: ButtonType.secondary,
                               ),
                             ),
-                            SizedBox(width: AppTheme.spaceSM),
+                            const SizedBox(width: AppTheme.spaceSM),
                             Expanded(
                               child: GustButton(
                                 text: "Delete",
@@ -1154,7 +1066,7 @@ class _SugarLogCreationDialogState extends State<SugarLogCreationDialog> {
                             icon: Icons.check_circle,
                           ),
                         ),
-                        SizedBox(height: AppTheme.spaceSM),
+                        const SizedBox(height: AppTheme.spaceSM),
                         // Cancel button (secondary, full width)
                         SizedBox(
                           width: double.infinity,

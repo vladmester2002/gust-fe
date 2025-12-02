@@ -1,25 +1,31 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:sqflite/sqflite.dart' as sqflite;
+import 'package:sqflite_sqlcipher/sqflite.dart' as sqlcipher;
 
 import '../models/auth_session.dart';
 import '../models/local_sugar_log.dart';
 import '../models/local_user.dart';
+import '../models/pending_partner_application.dart';
+import '../models/user_profile.dart';
+import '../../services/secure_storage_service.dart';
 
 class GustDatabase {
   GustDatabase._internal();
 
   static final GustDatabase instance = GustDatabase._internal();
   static const _dbName = 'gust_local.db';
-  static const _dbVersion = 1;
+  static const _dbVersion = 3;
+  static const _dbKeyStorageKey = 'gust_db_key_v1';
 
-  Database? _database;
+  sqflite.Database? _database;
   AuthSession? _cachedSession;
 
   final bool _useMemory = kIsWeb;
@@ -39,7 +45,7 @@ class GustDatabase {
   final Map<int, StreamController<List<LocalSugarLog>>> _logControllers =
       <int, StreamController<List<LocalSugarLog>>>{};
 
-  Future<Database> get database async {
+  Future<sqflite.Database> get database async {
     if (_useMemory) {
       throw UnsupportedError('In-memory mode does not expose a sqflite database');
     }
@@ -50,20 +56,50 @@ class GustDatabase {
     return _database!;
   }
 
-  Future<Database> _openDatabase() async {
-    final Directory dir = await getApplicationDocumentsDirectory();
-    final path = p.join(dir.path, _dbName);
-    return openDatabase(
-      path,
-      version: _dbVersion,
-      onConfigure: (db) async {
-        await db.execute('PRAGMA foreign_keys = ON');
-      },
-      onCreate: _createSchema,
-    );
+  Future<String> _getDatabasePassword() async {
+    final stored =
+        await SecureStorageService.instance.readEncryptionKey(_dbKeyStorageKey);
+    if (stored != null && stored.isNotEmpty) {
+      return stored;
+    }
+    final random = Random.secure();
+    final bytes = List<int>.generate(32, (_) => random.nextInt(256));
+    final key = base64UrlEncode(bytes);
+    await SecureStorageService.instance.storeEncryptionKey(_dbKeyStorageKey, key);
+    return key;
   }
 
-  Future<void> _createSchema(Database db, int version) async {
+  Future<sqflite.Database> _openDatabase() async {
+    final Directory dir = await getApplicationDocumentsDirectory();
+    final path = p.join(dir.path, _dbName);
+    final password = await _getDatabasePassword();
+
+    try {
+      return await sqlcipher.openDatabase(
+        path,
+        password: password,
+        version: _dbVersion,
+        onConfigure: (db) async {
+          await db.execute('PRAGMA foreign_keys = ON');
+        },
+        onCreate: _createSchema,
+        onUpgrade: _upgradeSchema,
+      );
+    } catch (_) {
+      // Fallback to regular sqflite (non-encrypted) if SQLCipher is unavailable
+      return await sqflite.openDatabase(
+        path,
+        version: _dbVersion,
+        onConfigure: (db) async {
+          await db.execute('PRAGMA foreign_keys = ON');
+        },
+        onCreate: _createSchema,
+        onUpgrade: _upgradeSchema,
+      );
+    }
+  }
+
+  Future<void> _createSchema(sqflite.Database db, int version) async {
     await db.execute('''
       CREATE TABLE users(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,6 +154,19 @@ class GustDatabase {
     ''');
 
     await db.execute('''
+      CREATE TABLE user_profiles(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL UNIQUE,
+        full_name TEXT NOT NULL,
+        daily_sugar_goal INTEGER DEFAULT 75,
+        current_streak INTEGER DEFAULT 0,
+        updated_at TEXT,
+        is_dirty INTEGER DEFAULT 0,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
       CREATE TABLE partner_links(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         owner_user_id INTEGER NOT NULL,
@@ -128,6 +177,53 @@ class GustDatabase {
         UNIQUE(owner_user_id, partner_user_id, module)
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE pending_partner_applications(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        expertise TEXT NOT NULL,
+        motivation TEXT NOT NULL,
+        status TEXT DEFAULT 'PENDING_SUBMISSION',
+        created_at TEXT NOT NULL,
+        synced_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    ''');
+  }
+
+  Future<void> _upgradeSchema(sqflite.Database db, int oldVersion, int newVersion) async {
+    // Migrate from version 1 to 2: Add user_profiles table
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS user_profiles(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL UNIQUE,
+          full_name TEXT NOT NULL,
+          daily_sugar_goal INTEGER DEFAULT 75,
+          current_streak INTEGER DEFAULT 0,
+          updated_at TEXT,
+          is_dirty INTEGER DEFAULT 0,
+          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+      ''');
+    }
+    
+    // Migrate from version 2 to 3: Add pending_partner_applications table
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS pending_partner_applications(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          expertise TEXT NOT NULL,
+          motivation TEXT NOT NULL,
+          status TEXT DEFAULT 'PENDING_SUBMISSION',
+          created_at TEXT NOT NULL,
+          synced_at TEXT,
+          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+      ''');
+    }
   }
 
   Future<LocalUser?> upsertUser(
@@ -158,7 +254,7 @@ class GustDatabase {
       userId = await db.insert(
         'users',
         data,
-        conflictAlgorithm: ConflictAlgorithm.replace,
+        conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
       );
     } else {
       userId = existing.first['id'] as int;
@@ -189,6 +285,34 @@ class GustDatabase {
     final user = _safeUserFromRow(row);
     if (user == null) {
       await _purgeCorruptUser(row);
+    }
+    return user;
+  }
+
+  /// Get existing guest user (ANONYMOUS provider)
+  Future<LocalUser?> getGuestUser() async {
+    if (_useMemory) {
+      await _ensureWebStoreLoaded();
+      // Find first user with ANONYMOUS provider
+      for (final user in _memoryUsers.values) {
+        if (user.authProvider == 'ANONYMOUS') {
+          return user;
+        }
+      }
+      return null;
+    }
+
+    final db = await database;
+    final rows = await db.query(
+      'users',
+      where: 'auth_provider = ?',
+      whereArgs: ['ANONYMOUS'],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final user = _safeUserFromRow(rows.first);
+    if (user == null) {
+      await _purgeCorruptUser(rows.first);
     }
     return user;
   }
@@ -332,7 +456,7 @@ class GustDatabase {
     final id = await db.insert(
       'sugar_logs',
       log.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      conflictAlgorithm: sqflite.ConflictAlgorithm.replace,
     );
     await _emitLogs(log.userId);
     return id;
@@ -428,6 +552,20 @@ class GustDatabase {
     return rows.map(LocalSugarLog.fromMap).toList();
   }
 
+  Future<List<LocalSugarLog>> fetchDirtyLogs(int userId) async {
+    if (_useMemory) {
+      final logs = _memoryLogsByUser[userId] ?? [];
+      return logs.where((log) => log.isDirty).toList();
+    }
+    final db = await database;
+    final rows = await db.query(
+      'sugar_logs',
+      where: 'user_id = ? AND is_dirty = 1',
+      whereArgs: [userId],
+    );
+    return rows.map(LocalSugarLog.fromMap).toList();
+  }
+
   Stream<List<LocalSugarLog>> watchLogs(int userId) {
     return _logControllers
         .putIfAbsent(
@@ -452,6 +590,65 @@ class GustDatabase {
 
     final db = await database;
     await db.delete('sugar_logs', where: 'id = ?', whereArgs: [logId]);
+    await _emitLogs(userId);
+  }
+
+  Future<void> upsertRemoteLog(LocalSugarLog log) async {
+    if (_useMemory) {
+      final logs = _memoryLogsByUser.putIfAbsent(log.userId, () => <LocalSugarLog>[]);
+      final existingIndex =
+          logs.indexWhere((entry) => entry.remoteId == log.remoteId);
+      final syncedCopy = log.copyWith(
+        id: existingIndex >= 0 ? logs[existingIndex].id : ++_logAutoId,
+        isDirty: false,
+        syncedAt: DateTime.now(),
+      );
+      if (existingIndex >= 0) {
+        logs[existingIndex] = syncedCopy;
+      } else {
+        logs.add(syncedCopy);
+      }
+      await _emitLogs(log.userId);
+      return;
+    }
+
+    final db = await database;
+    final data = log
+        .copyWith(
+          isDirty: false,
+          syncedAt: DateTime.now(),
+        )
+        .toMap();
+    
+    // CRITICAL FIX: Remove 'id' from update data to preserve the existing local primary key
+    data.remove('id');
+    
+    final updated = await db.update(
+      'sugar_logs',
+      data,
+      where: 'remote_id = ? AND user_id = ?',
+      whereArgs: [log.remoteId, log.userId],
+    );
+    if (updated == 0) {
+      await db.insert('sugar_logs', data);
+    }
+    await _emitLogs(log.userId);
+  }
+
+  Future<void> deleteLogByRemoteId(int remoteId, int userId) async {
+    if (_useMemory) {
+      final logs = _memoryLogsByUser[userId];
+      logs?.removeWhere((entry) => entry.remoteId == remoteId);
+      await _emitLogs(userId);
+      return;
+    }
+
+    final db = await database;
+    await db.delete(
+      'sugar_logs',
+      where: 'remote_id = ? AND user_id = ?',
+      whereArgs: [remoteId, userId],
+    );
     await _emitLogs(userId);
   }
 
@@ -639,6 +836,209 @@ class GustDatabase {
         'userAutoId': _userAutoId,
         'logAutoId': _logAutoId,
       }),
+    );
+  }
+
+  // ===== Pending Partner Applications Methods =====
+
+  Future<int> insertPendingPartnerApplication({
+    required int userId,
+    required String expertise,
+    required String motivation,
+  }) async {
+    if (_useMemory) {
+      // Skip for web memory mode
+      return -1;
+    }
+
+    final db = await database;
+    return await db.insert(
+      'pending_partner_applications',
+      {
+        'user_id': userId,
+        'expertise': expertise,
+        'motivation': motivation,
+        'status': 'PENDING_SUBMISSION',
+        'created_at': DateTime.now().toIso8601String(),
+      },
+    );
+  }
+
+  Future<List<PendingPartnerApplication>> fetchPendingPartnerApplications(int userId) async {
+    if (_useMemory) {
+      return [];
+    }
+
+    final db = await database;
+    final results = await db.query(
+      'pending_partner_applications',
+      where: 'user_id = ? AND synced_at IS NULL',
+      whereArgs: [userId],
+      orderBy: 'created_at DESC',
+    );
+
+    return results.map((row) => PendingPartnerApplication.fromMap(row)).toList();
+  }
+
+  Future<void> markPartnerApplicationSynced(int appId) async {
+    if (_useMemory) {
+      return;
+    }
+
+    final db = await database;
+    await db.update(
+      'pending_partner_applications',
+      {
+        'synced_at': DateTime.now().toIso8601String(),
+        'status': 'SUBMITTED',
+      },
+      where: 'id = ?',
+      whereArgs: [appId],
+    );
+  }
+
+  Future<void> deletePendingPartnerApplication(int appId) async {
+    if (_useMemory) {
+      return;
+    }
+
+    final db = await database;
+    await db.delete(
+      'pending_partner_applications',
+      where: 'id = ?',
+      whereArgs: [appId],
+    );
+  }
+
+  /// UserProfile methods for tracking goal changes
+  Future<void> upsertUserProfile(UserProfile profile) async {
+    if (_useMemory) {
+      return;
+    }
+
+    final db = await database;
+    final data = profile.toMap();
+    data.remove('id');
+    
+    final existing = await db.query(
+      'user_profiles',
+      where: 'user_id = ?',
+      whereArgs: [profile.userId],
+    );
+
+    if (existing.isEmpty) {
+      await db.insert('user_profiles', data);
+    } else {
+      await db.update(
+        'user_profiles',
+        data,
+        where: 'user_id = ?',
+        whereArgs: [profile.userId],
+      );
+    }
+  }
+
+  Future<UserProfile?> fetchUserProfile(int userId) async {
+    if (_useMemory) {
+      return null;
+    }
+
+    final db = await database;
+    final results = await db.query(
+      'user_profiles',
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
+
+    if (results.isEmpty) return null;
+    return UserProfile.fromMap(results.first);
+  }
+
+  Future<void> updateUserProfileGoal(int userId, int goal, {bool isDirty = false}) async {
+    if (_useMemory) {
+      final user = _memoryUsers[userId];
+      if (user != null) {
+        _memoryUsers[userId] = user.copyWith(dailySugarGoal: goal);
+        await _persistWebUsers();
+        _activeUserController.add(_memoryUsers[userId]);
+      }
+      return;
+    }
+
+    final db = await database;
+    
+    final existing = await db.query(
+      'user_profiles',
+      where: 'user_id = ?',
+      whereArgs: [userId],
+    );
+
+    final data = {
+      'daily_sugar_goal': goal,
+      'is_dirty': isDirty ? 1 : 0,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+
+    if (existing.isEmpty) {
+      final user = await getUserById(userId);
+      if (user != null) {
+        await db.insert('user_profiles', {
+          'user_id': userId,
+          'full_name': user.fullName,
+          'current_streak': 0,
+          ...data,
+        });
+      }
+    } else {
+      await db.update(
+        'user_profiles',
+        data,
+        where: 'user_id = ?',
+        whereArgs: [userId],
+      );
+    }
+    
+    await db.update(
+      'users',
+      {'daily_sugar_goal': goal},
+      where: 'id = ?',
+      whereArgs: [userId],
+    );
+    
+    final user = await getUserById(userId);
+    _activeUserController.add(user);
+  }
+
+  Future<UserProfile?> fetchDirtyUserProfile(int userId) async {
+    if (_useMemory) {
+      return null;
+    }
+
+    final db = await database;
+    final results = await db.query(
+      'user_profiles',
+      where: 'user_id = ? AND is_dirty = 1',
+      whereArgs: [userId],
+    );
+
+    if (results.isEmpty) return null;
+    return UserProfile.fromMap(results.first);
+  }
+
+  Future<void> markUserProfileSynced(int userId) async {
+    if (_useMemory) {
+      return;
+    }
+
+    final db = await database;
+    await db.update(
+      'user_profiles',
+      {
+        'is_dirty': 0,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'user_id = ?',
+      whereArgs: [userId],
     );
   }
 }

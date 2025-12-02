@@ -36,19 +36,19 @@ extension EmotionExtension on Emotion {
   String get emoji {
     switch (this) {
       case Emotion.HAPPY:
-        return "??";
+        return "😊";
       case Emotion.SAD:
-        return "??";
+        return "😢";
       case Emotion.STRESSED:
-        return "??";
+        return "😰";
       case Emotion.ANXIOUS:
-        return "??";
+        return "😟";
       case Emotion.TIRED:
-        return "??";
+        return "😴";
       case Emotion.BORED:
-        return "??";
+        return "😐";
       case Emotion.NEUTRAL:
-        return "??";
+        return "😶";
     }
   }
   IconData get icon {

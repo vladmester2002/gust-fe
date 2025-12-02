@@ -1,8 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
-
 import 'package:flutter/foundation.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../constants.dart';
@@ -13,7 +13,9 @@ import '../repositories/auth_repository.dart';
 import '../repositories/sugar_log_repository.dart';
 import '../services/auth_helper.dart';
 import '../services/biometric_auth_service.dart';
+import '../services/firebase_auth_service.dart';
 import '../services/secure_storage_service.dart';
+import '../services/sync_service.dart';
 import '../utils/hash_helper.dart';
 
 class AuthState extends ChangeNotifier {
@@ -23,12 +25,14 @@ class AuthState extends ChangeNotifier {
     BiometricAuthService? biometricAuthService,
     http.Client? httpClient,
     SecureStorageService? secureStorageService,
+    FirebaseAuthService? firebaseAuthService,
   })  : _authRepository = authRepository ?? AuthRepository(),
         _logRepository = logRepository ?? SugarLogRepository(),
         _biometricService = biometricAuthService ?? BiometricAuthService(),
         _client = httpClient ?? http.Client(),
-        _secureStorage = secureStorageService ?? SecureStorageService.instance {
-        _authRepository.watchActiveUser().listen((user) {
+        _secureStorage = secureStorageService ?? SecureStorageService.instance,
+        _firebaseAuthService = firebaseAuthService ?? FirebaseAuthService() {
+    _authRepository.watchActiveUser().listen((user) {
       _currentUser = user;
       _featureFlags = user?.featureFlags ?? [];
       notifyListeners();
@@ -50,17 +54,19 @@ class AuthState extends ChangeNotifier {
   final BiometricAuthService _biometricService;
   final http.Client _client;
   final SecureStorageService _secureStorage;
+  final FirebaseAuthService _firebaseAuthService;
 
   LocalUser? _currentUser;
   AuthSession? _session;
   bool _isLoading = false;
+  bool _isLocked = false;
   String? _error;
   List<String> _featureFlags = const [];
 
   LocalUser? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   String? get errorMessage => _error;
-  bool get isAuthenticated => _currentUser != null && _session != null;
+  bool get isAuthenticated => _currentUser != null && _session != null && !_isLocked;
   List<String> get featureFlags => _featureFlags;
   AuthSession? get session => _session;
 
@@ -72,23 +78,68 @@ class AuthState extends ChangeNotifier {
       _session = await _authRepository.readSession();
       _currentUser = await _authRepository.getActiveUser();
       _featureFlags = _currentUser?.featureFlags ?? [];
+      
+      // Debug logging
+      if (kDebugMode) {
+        print('=== HYDRATE DEBUG ===');
+        print('Current User: ${_currentUser?.email}');
+        print('Session exists: ${_session != null}');
+        print('User biometricEnabled (DB): ${_currentUser?.biometricEnabled}');
+      }
+      
+      // If user has biometric enabled, lock the app on startup
+      if (_currentUser != null && _currentUser!.biometricEnabled) {
+        _isLocked = true;
+        if (kDebugMode) {
+          print('Setting _isLocked = true (biometric enabled)');
+        }
+      } else {
+        if (kDebugMode) {
+          print('NOT locking app - biometric disabled or no user');
+        }
+      }
+      
+      if (kDebugMode) {
+        print('Final _isLocked state: $_isLocked');
+        print('isAuthenticated will return: ${_currentUser != null && _session != null && !_isLocked}');
+        print('===================');
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
+      if (_currentUser?.id != null) {
+        // Trigger background sync on app start
+        SyncService.instance.syncPendingLogs(_currentUser!.id!);
+      }
     }
+  }
+
+  Future<bool> hasCachedToken() async {
+    final token = await _secureStorage.readAccessToken();
+    return token != null;
   }
 
   Future<bool> loginWithEmail(String email, String password) async {
     if (enableMockAuth) {
       return _runLocalAuth(() => _loginLocally(email, password));
     }
-    return _executeAuthCall(
-      endpoint: '$baseUrl/api/auth/login',
-      body: {'email': email, 'password': password},
-      provider: 'EMAIL',
-      cachePassword: password,
-      offlineFallback: () => _loginLocally(email, password),
-    );
+    try {
+      final result = await _firebaseAuthService.signInWithEmail(
+        email: email,
+        password: password,
+      );
+      return await _executeAuthCall(
+        endpoint: '$baseUrl/api/auth/social-login',
+        body: {
+          'provider': 'EMAIL',
+          'idToken': result.idToken,
+        },
+        provider: 'EMAIL',
+      );
+    } catch (err) {
+      _captureError(err);
+      return false;
+    }
   }
 
   Future<bool> registerWithEmail({
@@ -105,83 +156,88 @@ class AuthState extends ChangeNotifier {
         ),
       );
     }
-    return _executeAuthCall(
-      endpoint: '$baseUrl/api/auth/register',
-      body: {'fullName': fullName, 'email': email, 'password': password},
-      provider: 'EMAIL',
-      cachePassword: password,
-      overrideFullName: fullName,
-      offlineFallback: () => _registerLocally(
-        fullName: fullName,
+    try {
+      final result = await _firebaseAuthService.registerWithEmail(
         email: email,
         password: password,
-      ),
-    );
+      );
+      return await _executeAuthCall(
+        endpoint: '$baseUrl/api/auth/social-login',
+        body: {
+          'provider': 'EMAIL',
+          'idToken': result.idToken,
+          'fullName': fullName,
+        },
+        provider: 'EMAIL',
+        overrideFullName: fullName,
+      );
+    } catch (err) {
+      _captureError(err);
+      return false;
+    }
   }
 
   Future<bool> loginAnonymously() async {
     _setLoading(true);
     try {
-      final savedGuest = await AuthHelper.getSavedGuestUser();
-      LocalUser? localUser;
-      if (savedGuest != null) {
-        localUser = await _authRepository.getUserByEmail(savedGuest.email);
-      }
-      const defaultFeatures = ['sugar_logs'];
-      final token = 'anon-${Random().nextInt(_offlineTokenMax)}';
-      bool seeded = false;
-      if (localUser == null) {
-        final anonymousEmail =
-            savedGuest?.email ?? 'anon_${DateTime.now().millisecondsSinceEpoch}@gust.app';
-        localUser = await _authRepository.persistUserProfile(
-          email: anonymousEmail,
-          fullName: 'Guest Explorer',
-          role: 'ANONYMOUS',
+      // Check if we already have a guest user stored locally
+      final existingGuestUser = await _authRepository.getGuestUser();
+      
+      if (existingGuestUser != null) {
+        // Reuse existing guest account
+        print('Reusing existing guest user: ${existingGuestUser.email}');
+        _currentUser = existingGuestUser;
+        
+        final token = 'guest_token_${existingGuestUser.id}';
+        
+        // Create a local session for the guest user
+        await _authRepository.saveSession(
+          userId: existingGuestUser.id!,
           provider: 'ANONYMOUS',
-          biometricEnabled: false,
-          rawPassword: token,
-          featureFlags: defaultFeatures,
+          token: token,
         );
-        if (localUser == null) {
-          throw Exception('Unable to create anonymous profile');
+        
+        // Store session metadata for AuthHelper
+        await _persistSessionMetadata(
+          token: token,
+          userId: existingGuestUser.id!,
+          email: existingGuestUser.email,
+          provider: 'ANONYMOUS',
+        );
+        
+        // Save biometric token for guest users (enables biometric login)
+        await _biometricService.saveUserEmail(existingGuestUser.email);
+        await _biometricService.saveAuthToken(token);
+        if (existingGuestUser.biometricEnabled) {
+          await _biometricService.enableBiometric();
         }
-        await AuthHelper.rememberGuestUser(
-          userId: localUser.id!,
-          email: anonymousEmail,
-        );
-        seeded = true;
-      } else {
-        await AuthHelper.rememberGuestUser(
-          userId: localUser.id!,
-          email: localUser.email,
-        );
+        
+        // Read the session back to populate _session
+        _session = await _authRepository.getActiveSession();
+        _featureFlags = existingGuestUser.featureFlags;
+        _isLocked = false;
+        _error = null;
+        
+        notifyListeners();
+        return true;
       }
-      if (seeded) {
-        await _hydrateInitialLogs(localUser.id!);
-      }
-      await _authRepository.persistSession(
-        userId: localUser.id!,
-        token: token,
+      
+      // No existing guest user, create a new one
+      print('Creating new guest user');
+      // Direct backend call for guest/anonymous session
+      return await _executeAuthCall(
+        endpoint: '$baseUrl/api/auth/anonymous',
+        body: {
+          'displayName': 'Guest User',
+        },
         provider: 'ANONYMOUS',
+        overrideFullName: 'Guest User',
       );
-      await _persistSessionMetadata(
-        token: token,
-        userId: localUser.id!,
-        email: localUser.email,
-        provider: 'ANONYMOUS',
-      );
-      final resolvedUser = await _ensureFeatureFlags(localUser);
-      _session = await _authRepository.readSession();
-      _currentUser = resolvedUser;
-      _featureFlags = resolvedUser.featureFlags.isNotEmpty
-          ? resolvedUser.featureFlags
-          : defaultFeatures;
-      _error = null;
-      notifyListeners();
-      return true;
     } catch (err) {
-      _error = err.toString();
-      notifyListeners();
+      _captureError(
+        err,
+        fallbackMessage: 'Unable to start a guest session right now.',
+      );
       return false;
     } finally {
       _setLoading(false);
@@ -189,9 +245,65 @@ class AuthState extends ChangeNotifier {
   }
 
   Future<bool> loginWithGoogle() async {
-    _error = 'Google Sign-In is not yet available on web. Please use email/password.';
-    notifyListeners();
-    return false;
+    try {
+      final result = await _firebaseAuthService.signInWithGoogle();
+      return await _executeAuthCall(
+        endpoint: '$baseUrl/api/auth/social-login',
+        body: {
+          'provider': 'GOOGLE',
+          'idToken': result.idToken,
+        },
+        provider: 'GOOGLE',
+        overrideFullName: result.displayName,
+      );
+    } catch (err) {
+      _captureError(err);
+      return false;
+    }
+  }
+
+  Future<bool> loginWithYahoo() async {
+    try {
+      final result = await _firebaseAuthService.signInWithYahoo();
+      return await _executeAuthCall(
+        endpoint: '$baseUrl/api/auth/social-login',
+        body: {
+          'provider': 'YAHOO',
+          'idToken': result.idToken,
+        },
+        provider: 'YAHOO',
+        overrideFullName: result.displayName,
+      );
+    } catch (err) {
+      _captureError(err);
+      return false;
+    }
+  }
+
+  Future<bool> loginWithGoogleDev({
+    required String email,
+    String? fullName,
+  }) async {
+    final normalizedEmail = email.trim();
+    if (normalizedEmail.isEmpty) {
+      _error = 'An email address is required to continue with Google.';
+      notifyListeners();
+      return false;
+    }
+    final normalizedName = fullName?.trim();
+    final builder = StringBuffer('dev-$normalizedEmail');
+    if (normalizedName != null && normalizedName.isNotEmpty) {
+      builder.write('|$normalizedName');
+    }
+    return _executeAuthCall(
+      endpoint: '$baseUrl/api/auth/social-login',
+      body: {
+        'provider': 'GOOGLE',
+        'idToken': builder.toString(),
+      },
+      provider: 'GOOGLE',
+      overrideFullName: normalizedName,
+    );
   }
 
   Future<bool> loginWithBiometrics() async {
@@ -207,7 +319,9 @@ class AuthState extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    final token = await _secureStorage.readAccessToken();
+    
+    // Get token from biometric service (uses secure storage internally)
+    final token = await _biometricService.getAuthToken();
     final session = await _authRepository.readSession();
     final user = await _authRepository.getActiveUser();
     if (token == null || session == null || user == null) {
@@ -218,6 +332,7 @@ class AuthState extends ChangeNotifier {
     _session = session;
     _currentUser = user;
     _featureFlags = user.featureFlags;
+    _isLocked = false;
     _error = null;
     notifyListeners();
     return true;
@@ -230,9 +345,57 @@ class AuthState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> enableBiometrics() async {
+    final user = _currentUser;
+    if (user == null) {
+      if (kDebugMode) {
+        print('enableBiometrics: No current user, aborting');
+      }
+      return;
+    }
+    
+    if (kDebugMode) {
+      print('=== ENABLE BIOMETRICS DEBUG ===');
+      print('Current user before update: ${user.email}');
+      print('Current biometricEnabled before: ${user.biometricEnabled}');
+    }
+    
+    await _authRepository.persistUserProfile(
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      provider: user.authProvider,
+      goal: user.dailySugarGoal,
+      allowPartnerRequests: user.allowPartnerRequests,
+      biometricEnabled: true,  // <<< Setting to TRUE
+      featureFlags: user.featureFlags,
+    );
+    
+    if (kDebugMode) {
+      print('Database update complete, fetching refreshed user...');
+    }
+    
+    final refreshed = await _authRepository.getActiveUser();
+    
+    if (kDebugMode) {
+      print('Refreshed user biometricEnabled: ${refreshed?.biometricEnabled}');
+      print('================================');
+    }
+    
+    _currentUser = refreshed;
+    notifyListeners();
+  }
+
   Future<void> signOut() async {
+    // Clear biometric token first (needs user_email from prefs)
+    await _biometricService.clearAuthToken();
+    
+    final provider = await AuthHelper.getProvider();
     await _authRepository.signOut();
     await AuthHelper.clearAuth();
+    if (provider != 'ANONYMOUS') {
+      await _firebaseAuthService.signOut();
+    }
     _currentUser = null;
     _session = null;
     _featureFlags = const [];
@@ -283,8 +446,7 @@ class AuthState extends ChangeNotifier {
       if (offlineFallback != null) {
         return await _runOfflineFallback(offlineFallback);
       }
-      _error = err.toString();
-      notifyListeners();
+      _captureError(err);
       return false;
     } finally {
       _setLoading(false);
@@ -297,8 +459,7 @@ class AuthState extends ChangeNotifier {
     try {
       return await fallback();
     } catch (err) {
-      _error = err.toString();
-      notifyListeners();
+      _captureError(err);
       return false;
     }
   }
@@ -442,38 +603,38 @@ class AuthState extends ChangeNotifier {
     String? passwordOverride,
     String? overrideFullName,
   }) async {
-    String? _extractString(dynamic value) {
+    String? extractString(dynamic value) {
       if (value == null) return null;
       if (value is String && value.isNotEmpty) return value;
       return value.toString();
     }
 
-    Map<String, dynamic>? _extractMap(dynamic source) {
+    Map<String, dynamic>? extractMap(dynamic source) {
       if (source is Map<String, dynamic>) return source;
       return null;
     }
 
-    int? _asInt(dynamic value) {
+    int? asInt(dynamic value) {
       if (value == null) return null;
       if (value is int) return value;
       if (value is double) return value.toInt();
       return int.tryParse(value.toString());
     }
 
-    String? token = _extractString(payload['token']);
-    token ??= _extractString(payload['accessToken']);
-    token ??= _extractString(payload['access_token']);
-    token ??= _extractString(_extractMap(payload['data'])?['token']);
-    token ??= _extractString(_extractMap(payload['data'])?['accessToken']);
+    String? token = extractString(payload['token']);
+    token ??= extractString(payload['accessToken']);
+    token ??= extractString(payload['access_token']);
+    token ??= extractString(extractMap(payload['data'])?['token']);
+    token ??= extractString(extractMap(payload['data'])?['accessToken']);
     if (token == null || token.isEmpty) {
       throw Exception('Invalid authentication response: missing token');
     }
 
-    final nestedUser =
-        _extractMap(payload['user']) ?? _extractMap(_extractMap(payload['data'])?['user']);
-    final nestedProfile = _extractMap(payload['profile']);
+    final nestedUser = extractMap(payload['user']) ??
+        extractMap(extractMap(payload['data'])?['user']);
+    final nestedProfile = extractMap(payload['profile']);
 
-    final int? remoteId = _asInt(
+    final int? remoteId = asInt(
       payload['userId'] ??
           payload['user_id'] ??
           nestedUser?['id'] ??
@@ -481,34 +642,35 @@ class AuthState extends ChangeNotifier {
     );
 
     final emailCandidate = payload['email'] as String? ??
-        _extractString(nestedUser?['email']) ??
-        _extractString(nestedProfile?['email']) ??
+        extractString(nestedUser?['email']) ??
+        extractString(nestedProfile?['email']) ??
         '';
-    final String resolvedEmail = emailCandidate.isNotEmpty ? emailCandidate : '';
+    final String resolvedEmail =
+        emailCandidate.isNotEmpty ? emailCandidate : '';
     if (resolvedEmail.isEmpty) {
       throw Exception('Invalid authentication response: missing email');
     }
 
     final fullName = overrideFullName ??
-        _extractString(payload['fullName']) ??
-        _extractString(nestedUser?['fullName']) ??
-        _extractString(nestedUser?['name']) ??
-        _extractString(nestedProfile?['fullName']) ??
+        extractString(payload['fullName']) ??
+        extractString(nestedUser?['fullName']) ??
+        extractString(nestedUser?['name']) ??
+        extractString(nestedProfile?['fullName']) ??
         resolvedEmail.split('@').first;
 
-    final String role = _extractString(payload['role']) ??
-        _extractString(nestedUser?['role']) ??
-        _extractString(nestedProfile?['role']) ??
+    final String role = extractString(payload['role']) ??
+        extractString(nestedUser?['role']) ??
+        extractString(nestedProfile?['role']) ??
         'USER';
 
-    final int? goal = _asInt(
+    final int? goal = asInt(
       payload['dailySugarGoal'] ??
           nestedUser?['dailySugarGoal'] ??
           nestedProfile?['dailySugarGoal'] ??
           nestedUser?['daily_goal'],
     );
 
-    bool _parseBool(dynamic value, {bool fallback = false}) {
+    bool parseBool(dynamic value, {bool fallback = false}) {
       if (value is bool) return value;
       if (value is num) return value != 0;
       if (value is String) {
@@ -519,14 +681,14 @@ class AuthState extends ChangeNotifier {
       return fallback;
     }
 
-    final allowPartnerRequests = _parseBool(
+    final allowPartnerRequests = parseBool(
       payload['allowPartnerRequests'] ??
           nestedUser?['allowPartnerRequests'] ??
           nestedProfile?['allowPartnerRequests'],
       fallback: true,
     );
 
-    final biometricEnabled = _parseBool(
+    final biometricEnabled = parseBool(
       payload['biometricEnabled'] ??
           nestedUser?['biometricEnabled'] ??
           nestedProfile?['biometricEnabled'],
@@ -552,6 +714,8 @@ class AuthState extends ChangeNotifier {
       rawPassword: passwordOverride ?? token,
       featureFlags: normalizedFeatures,
     );
+    
+    print('Auth Response Role: $role');
 
     if (persistedUser?.id == null) {
       throw Exception('Unable to persist local user profile');
@@ -566,6 +730,10 @@ class AuthState extends ChangeNotifier {
       provider: provider,
       biometricAllowed: biometricAllowed || biometricEnabled,
     );
+    
+    // Trigger sync after login
+    SyncService.instance.syncPendingLogs(persistedUser.id!);
+
     await _persistSessionMetadata(
       token: token,
       userId: persistedUser.id!,
@@ -581,43 +749,15 @@ class AuthState extends ChangeNotifier {
     _session = await _authRepository.readSession();
     _currentUser = persistedUser;
     _featureFlags = normalizedFeatures;
+    _isLocked = false;
     _error = null;
     notifyListeners();
   }
 
+
   Future<void> _hydrateInitialLogs(int userId) async {
-    // For now we seed a small sample to prove DB sync works offline.
-    final sampleLogs = <LocalSugarLog>[
-      LocalSugarLog(
-        userId: userId,
-        sugarGrams: 15,
-        date: DateTime.now(),
-        hour: DateTime.now().hour,
-        minute: DateTime.now().minute,
-        productName: 'Greek Yogurt',
-        sugarType: 'Natural',
-        contextNote: 'Post-workout snack',
-        emotion: 'ENERGIZED',
-        wasCraving: false,
-        visibility: 'PRIVATE',
-        isDirty: false,
-      ),
-      LocalSugarLog(
-        userId: userId,
-        sugarGrams: 22,
-        date: DateTime.now().subtract(const Duration(days: 1)),
-        hour: 15,
-        minute: 10,
-        productName: 'Protein bar',
-        sugarType: 'Added',
-        contextNote: 'Afternoon craving, approved for sharing',
-        emotion: 'FOCUSED',
-        wasCraving: true,
-        visibility: 'SHARED_WITH_PARTNER',
-        isDirty: false,
-      ),
-    ];
-    await _logRepository.replaceFromRemote(userId, sampleLogs);
+    // No seed data - users start with a clean slate
+    await _logRepository.replaceFromRemote(userId, []);
   }
 
   String _parseError(http.Response response) {
@@ -633,5 +773,118 @@ class AuthState extends ChangeNotifier {
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
+  }
+
+  void _captureError(
+    Object err, {
+    String? fallbackMessage,
+  }) {
+    if (kDebugMode) {
+      debugPrint('AuthState error: $err');
+    }
+    _error = _friendlyErrorMessage(err, fallbackMessage: fallbackMessage);
+    if (kDebugMode) {
+      debugPrint('AuthState friendly error message: $_error');
+    }
+    notifyListeners();
+  }
+
+  String _friendlyErrorMessage(
+    Object err, {
+    String? fallbackMessage,
+  }) {
+    // Check for network connectivity errors first
+    if (err is SocketException) {
+      return 'No internet connection detected. Please check your network connection and try again.';
+    }
+    
+    if (err is PlatformException) {
+      final platformMessage = _friendlyPlatformException(err);
+      if (platformMessage.isNotEmpty) {
+        return platformMessage;
+      }
+    }
+    
+    // Check for Firebase authentication errors
+    final raw = err.toString().toLowerCase();
+    
+    // Firebase auth error codes
+    if (raw.contains('user-not-found') || raw.contains('wrong-password') || 
+        raw.contains('invalid-credential') || raw.contains('invalid-email')) {
+      return 'Invalid email or password. Please check your credentials and try again.';
+    }
+    
+    if (raw.contains('user-disabled')) {
+      return 'This account has been disabled. Please contact support.';
+    }
+    
+    if (raw.contains('email-already-in-use')) {
+      return 'An account with this email already exists.';
+    }
+    
+    if (raw.contains('weak-password')) {
+      return 'Password is too weak. Please choose a stronger password.';
+    }
+    
+    if (raw.contains('network-request-failed')) {
+      return 'Network error. Please check your connection and try again.';
+    }
+    
+    // Check for common network error messages in string
+    if (raw.contains('socketexception') || 
+        raw.contains('xmlhttprequest error') ||
+        raw.contains('no route to host') ||
+        raw.contains('network is unreachable') ||
+        raw.contains('failed host lookup') ||
+        raw.contains('connection refused') ||
+        raw.contains('connection timed out') ||
+        raw.contains('software caused connection abort')) {
+      return 'Unable to connect to the server. Please check your internet connection and try again.';
+    }
+    
+    final rawOriginal = err.toString();
+    if (rawOriginal.isNotEmpty) {
+      const prefix = 'Exception: ';
+      if (rawOriginal.startsWith(prefix)) {
+        return rawOriginal.substring(prefix.length).trim();
+      }
+      return rawOriginal;
+    }
+    return fallbackMessage ?? 'Something went wrong. Please try again.';
+  }
+
+  String _friendlyPlatformException(PlatformException err) {
+    final code = err.code.toLowerCase();
+    final message = err.message ?? '';
+    final details = err.details?.toString() ?? '';
+    if (code.contains('sign_in')) {
+      if (code.contains('canceled') || code == 'popup-closed-by-user') {
+        return 'Sign-in was cancelled. Please try again.';
+      }
+      if (message.contains('10:') || details.contains('10')) {
+        return 'Google sign-in isn\'t fully configured for this build yet. Please use email sign-in for now.';
+      }
+      return 'Unable to complete sign-in. Please try again in a moment or use email instead.';
+    }
+    if (code == 'popup-closed-by-user' || code == 'web-context-cancelled') {
+      return 'Sign-in was cancelled.';
+    }
+    if (code.contains('network')) {
+      return 'We couldn\'t reach the authentication service. Check your internet connection and try again.';
+    }
+    if (code == 'notavailable' || code == 'not_available') {
+      return 'This feature is not available on your device.';
+    }
+    if (code == 'notenrolled') {
+      return 'No biometric data is enrolled on this device.';
+    }
+    if (code == 'lockedout' || code == 'permanentlylockedout') {
+      return 'Biometric authentication is temporarily locked. Please use your password.';
+    }
+    return message.isNotEmpty
+        ? message
+        : (details.isNotEmpty
+            ? details
+            : 'A device-level error occurred. Please try again.');
   }
 }

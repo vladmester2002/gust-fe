@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'theme/app_theme.dart';
 import 'widgets/gust_button.dart';
 import 'widgets/gust_text_field.dart';
 import 'widgets/auth_provider_buttons.dart';
-import 'services/biometric_auth_service.dart';
 import 'utils/notification_helper.dart';
 import 'state/auth_state.dart';
+import 'main.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -18,129 +15,43 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
-  final TextEditingController _usernameController = TextEditingController();
+class _LoginPageState extends State<LoginPage> {
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  late final AnimationController _animController;
-  late final Animation<Offset> _slideAnim;
-  late final Animation<double> _fadeAnim;
-  final BiometricAuthService _biometricService = BiometricAuthService();
-  bool _biometricVisible = false;
-  // (No explicit focus nodes required; keyboard flow uses FocusScope)
-
-  Future<void> _loginWithEmail() async {
-    if (!_formKey.currentState!.validate()) return;
-    final authState = context.read<AuthState>();
-    final success = await authState.loginWithEmail(
-      _usernameController.text.trim(),
-      _passwordController.text.trim(),
-    );
-    await _handleAuthResult(success);
-  }
-
-  Future<void> _loginWithGoogle() async {
-    final authState = context.read<AuthState>();
-    final success = await authState.loginWithGoogle();
-    await _handleAuthResult(success);
-  }
-
-  Future<void> _loginAnonymously() async {
-    final authState = context.read<AuthState>();
-    final success = await authState.loginAnonymously();
-    await _handleAuthResult(success);
-  }
-
-  Future<void> _loginWithBiometrics() async {
-    final authState = context.read<AuthState>();
-    final success = await authState.loginWithBiometrics();
-    await _handleAuthResult(success);
-  }
-
-  Future<void> _handleAuthResult(bool success) async {
-    if (!mounted) return;
-    final authState = context.read<AuthState>();
-    if (success) {
-      final prefs = await SharedPreferences.getInstance();
-      final hasCompletedOnboarding =
-          prefs.getBool('onboarding_completed') ?? false;
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(
-        context,
-        hasCompletedOnboarding ? '/main-nav' : '/onboarding',
-      );
-      return;
-    }
-
-    final message = authState.errorMessage;
-    if (message != null && mounted) {
-      await NotificationHelper.showError(
-        context,
-        message,
-        title: 'Authentication Failed',
-      );
-    }
-  }
-
-  Future<void> _signInWithFacebook() async {
-    await NotificationHelper.showWarning(
-      context,
-      'Facebook Sign-In coming soon!\n\nThis feature will be available in the next update.',
-      duration: const Duration(seconds: 3),
-    );
-  }
-
-  void _register() => Navigator.pushNamed(context, '/register');
-
-  @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
-    );
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-    _animController.forward();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkBiometricAuth();
-    });
-  }
-
-  /// Check if biometric authentication is enabled and authenticate if so
-  Future<void> _checkBiometricAuth() async {
-    final isBiometricEnabled = await _biometricService.isBiometricEnabled();
-    if (!isBiometricEnabled) return;
-
-    // Check if device supports biometric
-    final isAvailable = await _biometricService.isBiometricAvailable();
-    if (!isAvailable) return;
-
-    if (mounted && !_biometricVisible) {
-      setState(() => _biometricVisible = true);
-    }
-
-    final success = await context.read<AuthState>().loginWithBiometrics();
-    if (!success || !mounted) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('show_welcome_back', true);
-    final hasCompletedOnboarding =
-        prefs.getBool('onboarding_completed') ?? false;
-
-    if (!mounted) return;
-    Navigator.pushReplacementNamed(
-      context,
-      hasCompletedOnboarding ? '/main-nav' : '/onboarding',
-    );
-  }
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
-    _animController.dispose();
     super.dispose();
+  }
+
+  Future<void> _login() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final authState = context.read<AuthState>();
+    final success = await authState.loginWithEmail(
+      _emailController.text.trim(),
+      _passwordController.text.trim(),
+    );
+    if (!mounted) return;
+    if (success) {
+      // Navigation handled by AuthGate
+    } else {
+      final message = authState.errorMessage ?? 'Login failed. Please check your credentials.';
+      await NotificationHelper.showError(
+        context,
+        message,
+        title: 'Login Failed',
+      );
+    }
+  }
+
+  Future<void> _loginAsGuest() async {
+    final authState = context.read<AuthState>();
+    await authState.loginAnonymously();
+    if (!mounted) return;
+    Navigator.pushReplacementNamed(context, AppRoutes.mainNav);
   }
 
   @override
@@ -152,57 +63,43 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
           color: AppTheme.backgroundGrey,
         ),
         child: SafeArea(
-          child: Stack(
-            children: [
-              // (theme toggle removed)
-              Center(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.symmetric(horizontal: AppTheme.spaceLG),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 520),
-                      child: SlideTransition(
-                        position: _slideAnim,
-                        child: FadeTransition(
-                          opacity: _fadeAnim,
-                          child: Card(
-                          elevation: 12.0,
-                          shadowColor: Colors.black.withOpacity(0.2),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-                          ),
-                          child: Padding(
-                            padding: EdgeInsets.all(AppTheme.spaceXL),
-                            child: AutofillGroup(
-                              child: Form(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(horizontal: AppTheme.spaceLG),
+              child: Card(
+                elevation: 12.0,
+                shadowColor: Colors.black.withOpacity(0.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(AppTheme.spaceXL),
+                  child: AutofillGroup(
+                    child: Form(
                       key: _formKey,
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          // App Logo/Title
-                          Container(
-                            padding: EdgeInsets.all(AppTheme.spaceMD),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppTheme.primaryPurple.withOpacity(0.1),
-                            ),
-                            child: Icon(
-                              Icons.local_drink_outlined,
-                              size: 64,
-                              color: AppTheme.primaryPurple,
-                            ),
+                          // Logo or App Name
+                          Icon(
+                            Icons.favorite,
+                            size: 80,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                           SizedBox(height: AppTheme.spaceMD),
+                          
+                          // Title
                           Text(
-                            'GUST',
-                            style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                            'Welcome to GUST',
+                            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                                   color: Theme.of(context).colorScheme.primary,
-                                  fontSize: 48,
+                                  fontSize: 32,
                                 ),
                           ),
                           SizedBox(height: AppTheme.spaceSM),
                           Text(
-                            'Track your sugar, improve your health',
+                            'Track your sugar intake and stay healthy',
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                   color: AppTheme.textSecondary,
                                 ),
@@ -210,50 +107,23 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           ),
                           SizedBox(height: AppTheme.spaceXL),
 
-                          // Provider buttons (Google & Facebook)
-                          AuthProviderButtons(
-                            onGoogle: kIsWeb ? null : (_loginWithGoogle),
-                            onFacebook: _signInWithFacebook,
-                            onAnonymous: authState.isLoading ? null : _loginAnonymously,
-                          ),
-
-                          // Divider
-                          SizedBox(height: AppTheme.spaceMD),
-                          Row(
-                            children: [
-                              Expanded(child: Divider(color: Colors.grey.shade300)),
-                              Padding(
-                                padding: EdgeInsets.symmetric(horizontal: AppTheme.spaceMD),
-                                child: Text(
-                                  'OR',
-                                  style: TextStyle(
-                                    color: AppTheme.textSecondary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              Expanded(child: Divider(color: Colors.grey.shade300)),
-                            ],
-                          ),
-                          SizedBox(height: AppTheme.spaceMD),
-
                           // Email Field
-                          // use a lightweight regex for better validation
                           GustTextField(
-                            controller: _usernameController,
+                            controller: _emailController,
                             label: 'Email',
                             hint: 'Enter your email',
                             prefixIcon: Icons.email_outlined,
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: TextInputAction.next,
-                            semanticLabel: 'Email input',
-                            autofillHints: const [AutofillHints.username, AutofillHints.email],
+                            autofillHints: const [AutofillHints.email],
                             onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                             validator: (value) {
-                              if (value == null || value.isEmpty) return 'Please enter your email';
-                              final emailRe = RegExp(r"^[^\s@]+@[^\s@]+\.[^\s@]+");
-                              if (!emailRe.hasMatch(value)) return 'Invalid email format';
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter an email';
+                              }
+                              if (!value.contains('@')) {
+                                return 'Please enter a valid email';
+                              }
                               return null;
                             },
                           ),
@@ -267,21 +137,29 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                             prefixIcon: Icons.lock_outline,
                             obscureText: true,
                             textInputAction: TextInputAction.done,
-                            semanticLabel: 'Password input',
                             autofillHints: const [AutofillHints.password],
-                            onFieldSubmitted: (_) => _loginWithEmail(),
+                            onFieldSubmitted: (_) => _login(),
                             validator: (value) {
-                              if (value == null || value.isEmpty) return 'Please enter your password';
-                              if (value.length < 6) return 'Password must be at least 6 characters';
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter a password';
+                              }
                               return null;
                             },
                           ),
-                          // Forgot password link
+                          SizedBox(height: AppTheme.spaceSM),
+
+                          // Forgot Password Link
                           Align(
                             alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: () => Navigator.pushNamed(context, '/forgot-password'),
-                              child: Text('Forgot password?', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.accentTeal)),
+                            child: GestureDetector(
+                              onTap: () => Navigator.pushNamed(context, AppRoutes.forgotPassword),
+                              child: Text(
+                                'Forgot Password?',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: AppTheme.accentTeal,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
                           SizedBox(height: AppTheme.spaceLG),
@@ -289,24 +167,53 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           // Login Button
                           GustButton(
                             text: 'Login',
-                            onPressed: _loginWithEmail,
+                            onPressed: _login,
                             isLoading: authState.isLoading,
                             type: ButtonType.primary,
                             width: double.infinity,
                           ),
-                          if (_biometricVisible) ...[
-                            SizedBox(height: AppTheme.spaceSM),
-                            TextButton.icon(
-                              onPressed: authState.isLoading ? null : _loginWithBiometrics,
-                              icon: Icon(Icons.fingerprint, color: AppTheme.accentTeal),
-                              label: Text(
-                                'Sign in with biometrics',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: AppTheme.accentTeal,
-                                    ),
+                          SizedBox(height: AppTheme.spaceMD),
+
+                          // Divider
+                          Row(
+                            children: [
+                              Expanded(child: Divider()),
+                              Padding(
+                                padding: EdgeInsets.symmetric(horizontal: AppTheme.spaceSM),
+                                child: Text(
+                                  'OR',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
+                              Expanded(child: Divider()),
+                            ],
+                          ),
+                          SizedBox(height: AppTheme.spaceMD),
+
+                          // Auth Provider Buttons (Google, Yahoo)
+                          AuthProviderButtons(
+                            onGoogle: () async {
+                              final success = await context.read<AuthState>().loginWithGoogle();
+                              if (!success && mounted) {
+                                await NotificationHelper.showError(
+                                  context,
+                                  context.read<AuthState>().errorMessage ?? 'Google sign-in failed',
+                                );
+                              }
+                            },
+                            onYahoo: () async {
+                              final success = await context.read<AuthState>().loginWithYahoo();
+                              if (!success && mounted) {
+                                await NotificationHelper.showError(
+                                  context,
+                                  context.read<AuthState>().errorMessage ?? 'Yahoo sign-in failed',
+                                );
+                              }
+                            },
+                            onAnonymous: _loginAsGuest,
+                          ),
                           SizedBox(height: AppTheme.spaceMD),
 
                           // Register Link
@@ -314,37 +221,31 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Text(
-                                "Don't have an account? ",
+                                'Don\'t have an account? ',
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                               GestureDetector(
-                                onTap: _register,
+                                onTap: () => Navigator.pushNamed(context, AppRoutes.register),
                                 child: Text(
-                                  'Sign Up',
+                                  'Register',
                                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        color: AppTheme.accentTeal,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                                    color: AppTheme.accentTeal,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        ], // Column children
-                      ), // Column
-                    ), // Form
-                  ), // AutofillGroup
-                ), // Padding
-                          ), // Card
-                        ), // FadeTransition
-                      ), // SlideTransition
-                    ), // ConstrainedBox
-                  ), // inner Center
-                ), // SingleChildScrollView
-              ), // outer Center
-              ], // Stack children
-            ), // Stack
-          ), // SafeArea
-          ), // Container
-        ); // Scaffold body
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

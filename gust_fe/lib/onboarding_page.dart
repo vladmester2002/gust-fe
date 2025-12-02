@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gust_button.dart';
+import '../services/biometric_auth_service.dart';
 
 /// Onboarding screen shown to first-time users
 class OnboardingPage extends StatefulWidget {
-  const OnboardingPage({Key? key}) : super(key: key);
+  const OnboardingPage({super.key});
 
   @override
   State<OnboardingPage> createState() => _OnboardingPageState();
@@ -13,7 +14,9 @@ class OnboardingPage extends StatefulWidget {
 
 class _OnboardingPageState extends State<OnboardingPage> {
   final PageController _pageController = PageController();
+  final BiometricAuthService _biometricService = BiometricAuthService();
   int _currentPage = 0;
+  bool _biometricsEnabled = false;
 
   final List<OnboardingItem> _pages = [
     OnboardingItem(
@@ -38,6 +41,30 @@ class _OnboardingPageState extends State<OnboardingPage> {
           'Get helpful reminders and tips to maintain your healthy lifestyle. Build lasting habits with personalized guidance.',
     ),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    final available = await _biometricService.isBiometricAvailable();
+    if (available && mounted) {
+      setState(() {
+        _pages.add(
+          OnboardingItem(
+            icon: Icons.fingerprint,
+            iconColor: AppTheme.primaryPurple,
+            title: 'Secure Access',
+            description:
+                'Enable biometric authentication for faster and more secure login.',
+            showBiometricAction: true,
+          ),
+        );
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -79,7 +106,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
               alignment: Alignment.topRight,
               child: TextButton(
                 onPressed: _skip,
-                child: Text(
+                child: const Text(
                   'Skip',
                   style: TextStyle(
                     color: AppTheme.textSecondary,
@@ -114,11 +141,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 (index) => _buildIndicator(index == _currentPage),
               ),
             ),
-            SizedBox(height: AppTheme.spaceXL),
+            const SizedBox(height: AppTheme.spaceXL),
 
             // Next/Get Started button
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppTheme.spaceLG),
+              padding: const EdgeInsets.symmetric(horizontal: AppTheme.spaceLG),
               child: GustButton(
                 text: _currentPage == _pages.length - 1 ? 'Get Started' : 'Next',
                 onPressed: _nextPage,
@@ -127,7 +154,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 icon: _currentPage == _pages.length - 1 ? Icons.check : Icons.arrow_forward,
               ),
             ),
-            SizedBox(height: AppTheme.spaceXL),
+            const SizedBox(height: AppTheme.spaceXL),
           ],
         ),
       ),
@@ -136,13 +163,13 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   Widget _buildPage(OnboardingItem item) {
     return Padding(
-      padding: EdgeInsets.all(AppTheme.spaceXL),
+      padding: const EdgeInsets.all(AppTheme.spaceXL),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Icon
           Container(
-            padding: EdgeInsets.all(AppTheme.spaceXL),
+            padding: const EdgeInsets.all(AppTheme.spaceXL),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: item.iconColor.withOpacity(0.1),
@@ -153,7 +180,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
               color: item.iconColor,
             ),
           ),
-          SizedBox(height: AppTheme.spaceXL),
+          const SizedBox(height: AppTheme.spaceXL),
 
           // Title
           Text(
@@ -164,7 +191,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 ),
             textAlign: TextAlign.center,
           ),
-          SizedBox(height: AppTheme.spaceLG),
+          const SizedBox(height: AppTheme.spaceLG),
 
           // Description
           Text(
@@ -175,6 +202,23 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 ),
             textAlign: TextAlign.center,
           ),
+          
+          if (item.showBiometricAction) ...[
+            const SizedBox(height: AppTheme.spaceXL),
+            GustButton(
+              text: _biometricsEnabled ? 'Biometrics Enabled' : 'Enable Biometrics',
+              onPressed: _biometricsEnabled
+                  ? null
+                  : () async {
+                      await _biometricService.enableBiometric();
+                      setState(() {
+                        _biometricsEnabled = true;
+                      });
+                    },
+              type: ButtonType.secondary,
+              icon: _biometricsEnabled ? Icons.check : Icons.fingerprint,
+            ),
+          ],
         ],
       ),
     );
@@ -183,7 +227,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Widget _buildIndicator(bool isActive) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      margin: EdgeInsets.symmetric(horizontal: AppTheme.spaceXS),
+      margin: const EdgeInsets.symmetric(horizontal: AppTheme.spaceXS),
       height: 8,
       width: isActive ? 24 : 8,
       decoration: BoxDecoration(
@@ -199,11 +243,13 @@ class OnboardingItem {
   final Color iconColor;
   final String title;
   final String description;
+  final bool showBiometricAction;
 
   OnboardingItem({
     required this.icon,
     required this.iconColor,
     required this.title,
     required this.description,
+    this.showBiometricAction = false,
   });
 }

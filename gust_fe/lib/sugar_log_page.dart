@@ -76,7 +76,7 @@ class SugarLogPage extends StatelessWidget {
                 ),
               ),
               // Log cards
-              ...dailyLogs.map((log) => _buildLogTile(context, log)).toList(),
+              ...dailyLogs.map((log) => _buildLogTile(context, log)),
               if (dateIndex < sortedKeys.length - 1)
                 const SizedBox(height: 16),
             ],
@@ -97,11 +97,11 @@ class SugarLogPage extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: Theme.of(context).cardColor,
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
             color: Colors.black12,
             blurRadius: 6,
-            offset: const Offset(0, 3),
+            offset: Offset(0, 3),
           ),
         ],
       ),
@@ -161,7 +161,7 @@ class SugarLogPage extends StatelessWidget {
                   const SizedBox(width: 2),
                   Text(timeStr, style: const TextStyle(fontSize: 14)),
                   const SizedBox(width: 14),
-                  Icon(Icons.label_outline, size: 15, color: Colors.teal),
+                  const Icon(Icons.label_outline, size: 15, color: Colors.teal),
                   const SizedBox(width: 2),
                   Text(log.sugarType, style: const TextStyle(fontSize: 14)),
                 ],

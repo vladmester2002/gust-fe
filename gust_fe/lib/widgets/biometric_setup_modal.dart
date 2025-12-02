@@ -29,12 +29,12 @@ class BiometricSetupModal extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
       ),
       child: Padding(
-        padding: EdgeInsets.all(AppTheme.spaceXL),
+        padding: const EdgeInsets.all(AppTheme.spaceXL),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: EdgeInsets.all(AppTheme.spaceLG),
+              padding: const EdgeInsets.all(AppTheme.spaceLG),
               decoration: BoxDecoration(
                 color: AppTheme.primaryPurple.withOpacity(0.1),
                 shape: BoxShape.circle,
@@ -45,7 +45,7 @@ class BiometricSetupModal extends StatelessWidget {
                 color: AppTheme.primaryPurple,
               ),
             ),
-            SizedBox(height: AppTheme.spaceLG),
+            const SizedBox(height: AppTheme.spaceLG),
             Text(
               'Enable $biometricType?',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -54,7 +54,7 @@ class BiometricSetupModal extends StatelessWidget {
                   ),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: AppTheme.spaceMD),
+            const SizedBox(height: AppTheme.spaceMD),
             Text(
               'Sign in quickly and securely using your $biometricType for future logins.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -63,20 +63,20 @@ class BiometricSetupModal extends StatelessWidget {
                   ),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: AppTheme.spaceXL),
+            const SizedBox(height: AppTheme.spaceXL),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
                     onPressed: onSkip,
                     style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
+                      padding: const EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
                       side: BorderSide(color: AppTheme.textSecondary.withOpacity(0.3)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                       ),
                     ),
-                    child: Text(
+                    child: const Text(
                       'Skip',
                       style: TextStyle(
                         color: AppTheme.textSecondary,
@@ -86,12 +86,12 @@ class BiometricSetupModal extends StatelessWidget {
                     ),
                   ),
                 ),
-                SizedBox(width: AppTheme.spaceMD),
+                const SizedBox(width: AppTheme.spaceMD),
                 Expanded(
                   child: ElevatedButton(
                     onPressed: onEnable,
                     style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
+                      padding: const EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
                       backgroundColor: AppTheme.primaryPurple,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),

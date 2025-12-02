@@ -13,7 +13,7 @@ class GustCard extends StatelessWidget {
   final double? borderRadius;
 
   const GustCard({
-    Key? key,
+    super.key,
     required this.child,
     this.padding,
     this.margin,
@@ -22,7 +22,7 @@ class GustCard extends StatelessWidget {
     this.gradient,
     this.onTap,
     this.borderRadius,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -41,11 +41,11 @@ class GustCard extends StatelessWidget {
               ]
             : AppTheme.shadowLevel2,
       ),
-      margin: margin ?? EdgeInsets.symmetric(
+      margin: margin ?? const EdgeInsets.symmetric(
         horizontal: AppTheme.spaceMD,
         vertical: AppTheme.spaceSM,
       ),
-      padding: padding ?? EdgeInsets.all(AppTheme.spaceMD),
+      padding: padding ?? const EdgeInsets.all(AppTheme.spaceMD),
       child: child,
     );
 

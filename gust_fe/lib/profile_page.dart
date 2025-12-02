@@ -227,8 +227,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _logout() async {
     final authState = context.read<AuthState>();
-    await authState.signOut();
+    // Clear biometric token/settings first while user info is still available
     await _biometricService.clearAuthToken();
+    await authState.signOut();
     if (!mounted) return;
     Navigator.of(context).pushNamedAndRemoveUntil(
       AppRoutes.login,
@@ -262,7 +263,7 @@ class _ProfilePageState extends State<ProfilePage> {
               tooltip: "Logout",
               onPressed: _logout,
             ),
-          if (!_editing && !_loading)
+          if (!_editing && !_loading && !_guestMode)
             IconButton(
               icon: const Icon(Icons.edit_rounded, color: Colors.white),
               tooltip: "Edit",
@@ -641,6 +642,23 @@ class _ProfilePageState extends State<ProfilePage> {
           await _biometricService.saveAuthToken(token);
           await _biometricService.enableBiometric();
           
+          // Ensure we have the local user object
+          await _ensureLocalUser();
+          
+          // Update user profile in DB
+          if (_localUser != null) {
+            await _authRepository.persistUserProfile(
+              email: _localUser!.email,
+              fullName: _localUser!.fullName,
+              role: _localUser!.role,
+              provider: _localUser!.authProvider,
+              goal: _localUser!.dailySugarGoal,
+              allowPartnerRequests: _localUser!.allowPartnerRequests,
+              biometricEnabled: true,
+              featureFlags: _localUser!.featureFlags,
+            );
+          }
+          
           setState(() {
             _biometricEnabled = true;
           });
@@ -664,6 +682,23 @@ class _ProfilePageState extends State<ProfilePage> {
     } else {
       // User wants to disable biometric
       await _biometricService.disableBiometric();
+      
+      // Ensure we have the local user object
+      await _ensureLocalUser();
+      
+      // Update user profile in DB
+      if (_localUser != null) {
+        await _authRepository.persistUserProfile(
+          email: _localUser!.email,
+          fullName: _localUser!.fullName,
+          role: _localUser!.role,
+          provider: _localUser!.authProvider,
+          goal: _localUser!.dailySugarGoal,
+          allowPartnerRequests: _localUser!.allowPartnerRequests,
+          biometricEnabled: false,
+          featureFlags: _localUser!.featureFlags,
+        );
+      }
       
       setState(() {
         _biometricEnabled = false;

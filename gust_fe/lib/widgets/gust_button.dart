@@ -11,14 +11,14 @@ class GustButton extends StatelessWidget {
   final double? width;
 
   const GustButton({
-    Key? key,
+    super.key,
     required this.text,
     required this.onPressed,
     this.isLoading = false,
     this.type = ButtonType.primary,
     this.icon,
     this.width,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -37,14 +37,14 @@ class GustButton extends StatelessWidget {
           backgroundColor: _getBackgroundColor(),
           foregroundColor: _getForegroundColor(),
           elevation: type == ButtonType.primary ? 2 : 0,
-          padding: EdgeInsets.symmetric(
+          padding: const EdgeInsets.symmetric(
             horizontal: AppTheme.spaceXL,
             vertical: AppTheme.spaceMD,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
             side: type == ButtonType.secondary
-                ? BorderSide(color: AppTheme.primaryPurple, width: 1.5)
+                ? const BorderSide(color: AppTheme.primaryPurple, width: 1.5)
                 : BorderSide.none,
           ),
         ),
@@ -74,7 +74,7 @@ class GustButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 20),
-          SizedBox(width: AppTheme.spaceSM),
+          const SizedBox(width: AppTheme.spaceSM),
           Text(text),
         ],
       );

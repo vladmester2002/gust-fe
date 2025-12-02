@@ -94,6 +94,24 @@ class LocalSugarLog {
     };
   }
 
+  Map<String, dynamic> toApiMap() {
+    return {
+      // ID is not sent for creation, but might be needed for updates if backend requires it in body
+      // 'id': remoteId, 
+      'sugarGrams': sugarGrams,
+      'date': date.toIso8601String().substring(0, 10), // YYYY-MM-DD
+      'hour': hour,
+      'minute': minute,
+      'productName': productName,
+      'sugarType': sugarType,
+      'contextNote': contextNote,
+      'emotion': emotion,
+      'location': location,
+      'wasCraving': wasCraving,
+      'visibility': visibility,
+    };
+  }
+
   factory LocalSugarLog.fromMap(Map<String, dynamic> map) {
     return LocalSugarLog(
       id: map['id'] as int?,
@@ -114,6 +132,26 @@ class LocalSugarLog {
       syncedAt: map['synced_at'] != null
           ? DateTime.tryParse(map['synced_at'] as String)
           : null,
+    );
+  }
+
+  factory LocalSugarLog.fromApi(Map<String, dynamic> map, int currentUserId) {
+    return LocalSugarLog(
+      remoteId: map['id'] as int?, // API ID becomes remoteId
+      userId: currentUserId, // We need to pass this in as API might not return it or returns ownerId
+      sugarGrams: map['sugarGrams'] as int,
+      date: DateTime.parse(map['date'] as String),
+      hour: map['hour'] as int,
+      minute: map['minute'] as int,
+      productName: map['productName'] as String?,
+      sugarType: map['sugarType'] as String?,
+      contextNote: map['contextNote'] as String?,
+      emotion: map['emotion'] as String? ?? 'NEUTRAL',
+      location: map['location'] as String?,
+      wasCraving: map['wasCraving'] as bool? ?? false,
+      visibility: map['visibility'] as String? ?? 'PRIVATE',
+      isDirty: false, // Data from API is clean
+      syncedAt: DateTime.now(),
     );
   }
 }

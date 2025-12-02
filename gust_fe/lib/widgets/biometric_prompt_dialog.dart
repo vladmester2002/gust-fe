@@ -8,10 +8,10 @@ class BiometricPromptDialog extends StatelessWidget {
   final VoidCallback onSkip;
 
   const BiometricPromptDialog({
-    Key? key,
+    super.key,
     required this.onEnable,
     required this.onSkip,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -20,24 +20,24 @@ class BiometricPromptDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
       ),
       child: Padding(
-        padding: EdgeInsets.all(AppTheme.spaceXL),
+        padding: const EdgeInsets.all(AppTheme.spaceXL),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             // Icon
             Container(
-              padding: EdgeInsets.all(AppTheme.spaceLG),
+              padding: const EdgeInsets.all(AppTheme.spaceLG),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: AppTheme.primaryPurple.withOpacity(0.1),
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.fingerprint,
                 size: 64,
                 color: AppTheme.primaryPurple,
               ),
             ),
-            SizedBox(height: AppTheme.spaceLG),
+            const SizedBox(height: AppTheme.spaceLG),
 
             // Title
             Text(
@@ -48,7 +48,7 @@ class BiometricPromptDialog extends StatelessWidget {
                   ),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: AppTheme.spaceMD),
+            const SizedBox(height: AppTheme.spaceMD),
 
             // Description
             Text(
@@ -58,7 +58,7 @@ class BiometricPromptDialog extends StatelessWidget {
                   ),
               textAlign: TextAlign.center,
             ),
-            SizedBox(height: AppTheme.spaceXL),
+            const SizedBox(height: AppTheme.spaceXL),
 
             // Buttons
             Row(
@@ -67,30 +67,30 @@ class BiometricPromptDialog extends StatelessWidget {
                   child: OutlinedButton(
                     onPressed: onSkip,
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: AppTheme.dividerGrey),
-                      padding: EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
+                      side: const BorderSide(color: AppTheme.dividerGrey),
+                      padding: const EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                       ),
                     ),
-                    child: Text(
+                    child: const Text(
                       'Skip',
                       style: TextStyle(color: AppTheme.textSecondary),
                     ),
                   ),
                 ),
-                SizedBox(width: AppTheme.spaceMD),
+                const SizedBox(width: AppTheme.spaceMD),
                 Expanded(
                   child: ElevatedButton(
                     onPressed: onEnable,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primaryPurple,
-                      padding: EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
+                      padding: const EdgeInsets.symmetric(vertical: AppTheme.spaceMD),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
                       ),
                     ),
-                    child: Text('Enable'),
+                    child: const Text('Enable'),
                   ),
                 ),
               ],

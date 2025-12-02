@@ -1,4 +1,4 @@
-package com.example.gust_fe
+package com.gust.app
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

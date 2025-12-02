@@ -25,10 +25,10 @@ class PasswordStrengthIndicator extends StatelessWidget {
   final bool showRequirements;
 
   const PasswordStrengthIndicator({
-    Key? key,
+    super.key,
     required this.password,
     this.showRequirements = true,
-  }) : super(key: key);
+  });
 
   PasswordStrengthResult _calculateStrength(String password) {
     if (password.isEmpty) {
@@ -162,7 +162,7 @@ class PasswordStrengthIndicator extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(width: AppTheme.spaceSM),
+            const SizedBox(width: AppTheme.spaceSM),
             Text(
               strengthText,
               style: TextStyle(
@@ -176,7 +176,7 @@ class PasswordStrengthIndicator extends StatelessWidget {
 
         // Requirements checklist
         if (showRequirements && password.isNotEmpty) ...[
-          SizedBox(height: AppTheme.spaceSM),
+          const SizedBox(height: AppTheme.spaceSM),
           ..._buildRequirementsList(password),
         ],
       ],
@@ -194,7 +194,7 @@ class PasswordStrengthIndicator extends StatelessWidget {
 
     return requirements
         .map((req) => Padding(
-              padding: EdgeInsets.only(bottom: AppTheme.spaceXS),
+              padding: const EdgeInsets.only(bottom: AppTheme.spaceXS),
               child: Row(
                 children: [
                   Icon(
@@ -202,7 +202,7 @@ class PasswordStrengthIndicator extends StatelessWidget {
                     size: 16,
                     color: req.met ? AppTheme.successGreen : AppTheme.textSecondary.withOpacity(0.5),
                   ),
-                  SizedBox(width: AppTheme.spaceXS),
+                  const SizedBox(width: AppTheme.spaceXS),
                   Text(
                     req.text,
                     style: TextStyle(

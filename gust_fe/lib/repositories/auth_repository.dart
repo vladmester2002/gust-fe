@@ -101,6 +101,30 @@ class AuthRepository {
     await _database.updatePartnerPreference(user.id!, allow);
   }
 
+  /// Get existing guest user from local database
+  Future<LocalUser?> getGuestUser() async {
+    return _database.getGuestUser();
+  }
+
+  /// Save a session for a user (used for guest users)
+  Future<void> saveSession({
+    required int userId,
+    required String provider,
+    required String token,
+  }) async {
+    final session = AuthSession(
+      userId: userId,
+      accessToken: token,
+      provider: provider,
+      createdAt: DateTime.now(),
+      biometricAllowed: false,
+    );
+    await _database.saveSession(session);
+    await _secureStorage.cacheAccessToken(token);
+  }
+
+  Future<AuthSession?> getActiveSession() => _database.getActiveSession();
+
   Future<void> cacheBiometricSecret(String email, String secret) =>
       _secureStorage.cacheBiometricSecret(email, secret);
 

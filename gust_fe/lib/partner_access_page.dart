@@ -1,10 +1,11 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'main.dart';
 import 'analytics_page.dart';
+import 'repositories/partner_application_repository.dart';
 import 'theme/app_theme.dart';
 import 'widgets/gust_card.dart';
 import 'utils/notification_helper.dart';
@@ -21,7 +22,7 @@ class PartnerAccessPage extends StatefulWidget {
 }
 
 class _PartnerAccessPageState extends State<PartnerAccessPage> {
-  final PartnerAccessApi _api = PartnerAccessApi();
+  final PartnerAccessApi _api = const PartnerAccessApi();
   final AuthRepository _authRepository = AuthRepository();
   final TextEditingController _ownerSearchController = TextEditingController();
   final TextEditingController _expertiseController = TextEditingController();
@@ -30,7 +31,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
   List<PartnerOwnerSuggestion> _ownerSuggestions = [];
   PartnerOwnerSuggestion? _selectedOwner;
 
-  String _selectedModule = 'ANALYTICS';
+  final String _selectedModule = 'ANALYTICS';
   bool _isLoading = true;
   bool _isSubmitting = false;
   bool _isApplying = false;
@@ -40,6 +41,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
   String _role = 'USER';
   String _userEmail = '';
   String _userName = '';
+  int? _userId;
 
   List<PartnerAccessEntry> _incoming = [];
   List<PartnerAccessEntry> _outgoing = [];
@@ -70,14 +72,15 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
     _role = user?.role ?? 'USER';
     _userEmail = user?.email ?? '';
     _userName = user?.fullName ?? _userEmail;
+    _userId = user?.id;
 
     if (_userEmail.isEmpty) {
       final fallback = await _authRepository.getActiveUser();
       if (fallback != null && fallback.email.isNotEmpty) {
         _userEmail = fallback.email;
-        _userName = fallback.fullName.isNotEmpty
-            ? fallback.fullName
-            : fallback.email;
+        _userName =
+            fallback.fullName.isNotEmpty ? fallback.fullName : fallback.email;
+        _userId = fallback.id;
       }
     }
 
@@ -331,23 +334,45 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
       );
       return;
     }
+    
     setState(() => _isApplying = true);
+    
     try {
+      // Try to submit online
       await _api.applyForPartnerRole(
         expertise: expertise,
         motivation: motivation,
       );
+      
       setState(() => _applicationStatus = 'PENDING');
       await NotificationHelper.showSuccess(
         context,
         'Application submitted! We\'ll notify you when it is reviewed.',
       );
     } catch (err) {
-      await NotificationHelper.showWarning(
-        context,
-        err.toString(),
-        title: 'Unable to submit application',
-      );
+      // Check if this is a network error (offline mode)
+      final errorString = err.toString().toLowerCase();
+      final isNetworkError = errorString.contains('network') || 
+                            errorString.contains('connection') || 
+                            errorString.contains('offline') ||
+                            errorString.contains('socketexception') ||
+                            errorString.contains('failed host lookup');
+      
+      if (isNetworkError) {
+        // Show offline error
+        await NotificationHelper.showWarning(
+          context,
+          'You\'re offline. Please connect to the internet to submit your partner application.',
+          title: 'No Internet Connection',
+        );
+      } else {
+        // Some other server error
+        await NotificationHelper.showWarning(
+          context,
+          err.toString(),
+          title: 'Unable to submit application',
+        );
+      }
     } finally {
       if (mounted) setState(() => _isApplying = false);
     }
@@ -461,32 +486,59 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
     final canLogSugar = authState.featureFlags.contains('sugar_logs');
     final bool showNavigation = _role.toUpperCase() != 'ADMIN';
 
+    final content = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildHeroBanner(authState),
+            const SizedBox(height: 16),
+            if (_error != null) _buildErrorBanner(),
+            if (_isLoading)
+              const SizedBox(
+                height: 260,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else ...[
+              if (_isGuest) _buildGuestNotice(),
+              if (!_isGuest)
+                _sectionCard(
+                  title: 'Network pulse',
+                  subtitle:
+                      'Requests, shares, and active collaborations at a glance.',
+                  icon: Icons.auto_graph_rounded,
+                  child: _buildHeroStats(),
+                ),
+              if (!_isGuest)
+                _sectionCard(
+                  title: 'Collaboration summary',
+                  subtitle:
+                      'Who has access, what you shared, and how your requests are progressing.',
+                  icon: Icons.dashboard_customize_outlined,
+                  child: _buildCollaborationSummary(),
+                ),
+              if (_role == 'ADMIN') _buildApplicationQueue(),
+              if (_role == 'USER' && !_isGuest) _buildPartnerApplicationCard(),
+              if (_role == 'USER' && !_isGuest) _buildPreferenceCard(),
+              if (_role == 'PARTNER') _buildRequestForm(),
+              if (_role == 'USER') _buildIncomingSection(),
+              if (_role == 'PARTNER') _buildOutgoingSection(),
+              _buildAssignmentSection(_role),
+            ],
+          ],
+        ),
+      ),
+    );
+
     final body = RefreshIndicator(
       onRefresh: _loadData,
       child: ListView(
-        padding: EdgeInsets.all(AppTheme.spaceLG),
-        children: [
-          _buildHeroBanner(authState),
-          const SizedBox(height: 16),
-          if (_error != null) _buildErrorBanner(),
-          if (_isLoading)
-            const SizedBox(
-              height: 260,
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else ...[
-            if (_isGuest) _buildGuestNotice(),
-            if (!_isGuest) _buildHeroStats(),
-            if (!_isGuest) _buildCollaborationSummary(),
-            if (_role == 'ADMIN') _buildApplicationQueue(),
-            if (_role == 'USER' && !_isGuest) _buildPartnerApplicationCard(),
-            if (_role == 'USER' && !_isGuest) _buildPreferenceCard(),
-            if (_role == 'PARTNER') _buildRequestForm(),
-            if (_role == 'USER') _buildIncomingSection(),
-            if (_role == 'PARTNER') _buildOutgoingSection(),
-            _buildAssignmentSection(_role),
-          ],
-        ],
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppTheme.spaceMD,
+          vertical: AppTheme.spaceLG,
+        ),
+        children: [content],
       ),
     );
 
@@ -495,16 +547,17 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
       floatingActionButton: showNavigation && canLogSugar
           ? FloatingActionButton(
               onPressed: _showAddSugarLogDialog,
-              child: const Icon(Icons.add),
               tooltip: 'Register Sugar Intake',
               shape: const CircleBorder(),
+              child: const Icon(Icons.add),
             )
           : null,
       floatingActionButtonLocation: showNavigation && canLogSugar
           ? FloatingActionButtonLocation.centerDocked
           : null,
-      bottomNavigationBar:
-          showNavigation ? _buildBottomNavigation(canLogSugar: canLogSugar) : null,
+      bottomNavigationBar: showNavigation
+          ? _buildBottomNavigation(canLogSugar: canLogSugar)
+          : null,
       body: Stack(
         children: [
           Container(
@@ -563,14 +616,14 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
     final displayName = _userName.isEmpty
         ? authState.currentUser?.fullName ?? 'Partner'
         : _userName;
-    final email = _userEmail.isEmpty
-        ? authState.currentUser?.email ?? ''
-        : _userEmail;
-    final badgeColor =
-        _role.toUpperCase() == 'PARTNER' ? AppTheme.accentTeal : AppTheme.infoBlue;
-    final status = (_applicationStatus ??
-            (_role == 'PARTNER' ? 'APPROVED' : 'DRAFT'))
-        .toUpperCase();
+    final email =
+        _userEmail.isEmpty ? authState.currentUser?.email ?? '' : _userEmail;
+    final badgeColor = _role.toUpperCase() == 'PARTNER'
+        ? AppTheme.accentTeal
+        : AppTheme.infoBlue;
+    final status =
+        (_applicationStatus ?? (_role == 'PARTNER' ? 'APPROVED' : 'DRAFT'))
+            .toUpperCase();
     final statusColor = status == 'APPROVED'
         ? AppTheme.successGreen
         : status == 'PENDING'
@@ -578,10 +631,13 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
             : AppTheme.textSecondary;
 
     return Container(
-      padding: EdgeInsets.all(AppTheme.spaceLG),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.spaceLG,
+        vertical: AppTheme.spaceLG,
+      ),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AppTheme.primaryPurple, Color(0xFF6A1B9A)],
+          colors: [Color(0xFF6A1B9A), Color(0xFF51219C)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -592,21 +648,21 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               CircleAvatar(
-                radius: 32,
+                radius: 30,
                 backgroundColor: Colors.white.withOpacity(0.2),
                 child: Text(
                   displayName.isEmpty ? '?' : displayName[0].toUpperCase(),
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 26,
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-              SizedBox(width: AppTheme.spaceMD),
+              const SizedBox(width: AppTheme.spaceMD),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -615,21 +671,27 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
                       displayName,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 24,
+                        fontSize: 22,
                         fontWeight: FontWeight.w700,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: true,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       email,
                       style: const TextStyle(color: Colors.white70),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: true,
                     ),
                   ],
                 ),
               ),
               if (_role != 'ADMIN')
                 Container(
-                  padding: EdgeInsets.symmetric(
+                  padding: const EdgeInsets.symmetric(
                     horizontal: AppTheme.spaceMD,
                     vertical: AppTheme.spaceXS,
                   ),
@@ -637,14 +699,16 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
                     color: Colors.white.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(Icons.waving_hand_rounded, color: Colors.white, size: 18),
+                    children: [
+                      Icon(Icons.waving_hand_rounded,
+                          color: Colors.white, size: 18),
                       SizedBox(width: 6),
                       Text(
                         'Care network hub',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -674,9 +738,9 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
             ],
           ),
           const SizedBox(height: AppTheme.spaceSM),
-          Text(
+          const Text(
             'Control how partners collaborate with you and keep everyone aligned.',
-            style: const TextStyle(color: Colors.white70),
+            style: TextStyle(color: Colors.white70),
           ),
         ],
       ),
@@ -686,15 +750,15 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
   Widget _buildErrorBanner() {
     return GustCard(
       backgroundColor: AppTheme.errorRed.withOpacity(0.08),
-      padding: EdgeInsets.all(AppTheme.spaceMD),
+      padding: const EdgeInsets.all(AppTheme.spaceMD),
       child: Row(
         children: [
           const Icon(Icons.warning_amber_rounded, color: AppTheme.errorRed),
-          SizedBox(width: AppTheme.spaceSM),
+          const SizedBox(width: AppTheme.spaceSM),
           Expanded(
             child: Text(
               _error ?? '',
-              style: TextStyle(
+              style: const TextStyle(
                 color: AppTheme.errorRed,
                 fontWeight: FontWeight.w600,
               ),
@@ -712,7 +776,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Icon(Icons.lock_outline),
-          SizedBox(width: AppTheme.spaceMD),
+          const SizedBox(width: AppTheme.spaceMD),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -721,7 +785,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
                   'Partner tools unavailable',
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
-                SizedBox(height: AppTheme.spaceXS),
+                const SizedBox(height: AppTheme.spaceXS),
                 Text(
                   'Guests can browse the app but must create an account to invite or approve partners.',
                   style: Theme.of(context)
@@ -765,8 +829,9 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
       ),
     ];
 
-    final availableWidth = MediaQuery.of(context).size.width - (AppTheme.spaceLG * 2);
-    final spacing = AppTheme.spaceMD;
+    final availableWidth =
+        MediaQuery.of(context).size.width - (AppTheme.spaceLG * 2);
+    const spacing = AppTheme.spaceMD;
     final isCompact = availableWidth < 640;
     final tileWidth = isCompact
         ? double.infinity
@@ -780,7 +845,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
             (config) => SizedBox(
               width: isCompact ? double.infinity : tileWidth,
               child: Container(
-                padding: EdgeInsets.symmetric(
+                padding: const EdgeInsets.symmetric(
                   vertical: AppTheme.spaceLG,
                   horizontal: AppTheme.spaceLG,
                 ),
@@ -820,95 +885,57 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
         _outgoing.where((entry) => entry.status == 'PENDING').length;
     final outgoingRejected =
         _outgoing.where((entry) => entry.status == 'REJECTED').length;
-    final modules = _assignments.map((entry) => _friendlyModule(entry.module)).toSet();
+    final modules =
+        _assignments.map((entry) => _friendlyModule(entry.module)).toSet();
 
-    return GustCard(
-      margin: EdgeInsets.only(bottom: AppTheme.spaceLG),
-      padding: EdgeInsets.all(AppTheme.spaceLG),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryPurple.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(Icons.insights, color: AppTheme.primaryPurple),
-              ),
-              SizedBox(width: AppTheme.spaceMD),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Collaboration insights',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Track how partner requests evolve across modules and statuses.',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: AppTheme.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildInsightRowCompact(
+          icon: Icons.hourglass_top_outlined,
+          color: AppTheme.warningOrange,
+          label: 'Pending approvals',
+          value: pendingApprovals.toString(),
+          subtitle: pendingApprovals == 0
+              ? 'You are up to date – no approvals waiting.'
+              : '$pendingApprovals request${pendingApprovals > 1 ? 's' : ''} waiting for your response.',
+        ),
+        const SizedBox(height: AppTheme.spaceSM),
+        _buildInsightRowCompact(
+          icon: Icons.outbox_rounded,
+          color: AppTheme.infoBlue,
+          label: 'Your requests',
+          value: '$outgoingApproved approved / $outgoingPending pending',
+          subtitle: outgoingRejected > 0
+              ? '$outgoingRejected request${outgoingRejected > 1 ? 's were' : ' was'} rejected. You can resend after updating context.'
+              : 'Keep an eye on approvals to unlock shared dashboards.',
+        ),
+        const SizedBox(height: AppTheme.spaceSM),
+        _buildInsightRowCompact(
+          icon: Icons.handshake_outlined,
+          color: AppTheme.successGreen,
+          label: 'Active partnerships',
+          value: _assignments.length.toString(),
+          subtitle: modules.isEmpty
+              ? 'No shared modules yet.'
+              : 'Sharing across ${modules.length} module${modules.length == 1 ? '' : 's'}.',
+        ),
+        if (modules.isNotEmpty) ...[
+          const SizedBox(height: AppTheme.spaceSM),
+          Wrap(
+            spacing: AppTheme.spaceSM,
+            runSpacing: AppTheme.spaceXS,
+            children: modules
+                .map(
+                  (module) => Chip(
+                    label: Text(module),
+                    backgroundColor: AppTheme.backgroundGrey,
+                  ),
+                )
+                .toList(),
           ),
-          SizedBox(height: AppTheme.spaceMD),
-          _buildInsightRow(
-            icon: Icons.hourglass_top_outlined,
-            color: AppTheme.warningOrange,
-            label: 'Pending approvals',
-            value: pendingApprovals.toString(),
-            subtitle: pendingApprovals == 0
-                ? 'You are up to date – no approvals waiting.'
-                : '$pendingApprovals request${pendingApprovals > 1 ? 's' : ''} waiting for your response.',
-          ),
-          SizedBox(height: AppTheme.spaceSM),
-          _buildInsightRow(
-            icon: Icons.outbox_rounded,
-            color: AppTheme.infoBlue,
-            label: 'Your requests',
-            value: '${outgoingApproved} approved / ${outgoingPending} pending',
-            subtitle: outgoingRejected > 0
-                ? '$outgoingRejected request${outgoingRejected > 1 ? 's were' : ' was'} rejected. You can resend after updating context.'
-                : 'Keep an eye on approvals to unlock shared dashboards.',
-          ),
-          SizedBox(height: AppTheme.spaceSM),
-          _buildInsightRow(
-            icon: Icons.handshake_outlined,
-            color: AppTheme.successGreen,
-            label: 'Active partnerships',
-            value: _assignments.length.toString(),
-            subtitle: modules.isEmpty
-                ? 'No shared modules yet.'
-                : 'Sharing across ${modules.length} module${modules.length == 1 ? '' : 's'}.',
-          ),
-          if (modules.isNotEmpty) ...[
-            SizedBox(height: AppTheme.spaceSM),
-            Wrap(
-              spacing: AppTheme.spaceSM,
-              runSpacing: AppTheme.spaceXS,
-              children: modules
-                  .map(
-                    (module) => Chip(
-                      label: Text(module),
-                      backgroundColor: AppTheme.backgroundGrey,
-                    ),
-                  )
-                  .toList(),
-            ),
-          ],
         ],
-      ),
+      ],
     );
   }
 
@@ -943,7 +970,11 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
                           ),
                         ),
                         Text(
-                          record.submittedAt.toLocal().toString().split(' ').first,
+                          record.submittedAt
+                              .toLocal()
+                              .toString()
+                              .split(' ')
+                              .first,
                           style: Theme.of(context)
                               .textTheme
                               .bodySmall
@@ -968,13 +999,16 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         TextButton.icon(
-                          onPressed: () => _reviewApplication(record, 'REJECTED'),
-                          icon: const Icon(Icons.close, color: AppTheme.errorRed),
+                          onPressed: () =>
+                              _reviewApplication(record, 'REJECTED'),
+                          icon:
+                              const Icon(Icons.close, color: AppTheme.errorRed),
                           label: const Text('Reject'),
                         ),
                         const SizedBox(width: 12),
                         ElevatedButton.icon(
-                          onPressed: () => _reviewApplication(record, 'APPROVED'),
+                          onPressed: () =>
+                              _reviewApplication(record, 'APPROVED'),
                           icon: const Icon(Icons.check),
                           label: const Text('Approve'),
                           style: ElevatedButton.styleFrom(
@@ -996,8 +1030,8 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
   Widget _buildPartnerApplicationCard() {
     final status = _applicationStatus;
     return GustCard(
-      margin: EdgeInsets.only(bottom: AppTheme.spaceLG),
-      padding: EdgeInsets.all(AppTheme.spaceLG),
+      margin: const EdgeInsets.only(bottom: AppTheme.spaceLG),
+      padding: const EdgeInsets.all(AppTheme.spaceLG),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1010,9 +1044,10 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
                   color: AppTheme.primaryPurple.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(Icons.favorite_outline, color: AppTheme.primaryPurple),
+                child: const Icon(Icons.favorite_outline,
+                    color: AppTheme.primaryPurple),
               ),
-              SizedBox(width: AppTheme.spaceMD),
+              const SizedBox(width: AppTheme.spaceMD),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1056,7 +1091,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
             label: 'Your role or expertise',
             hint: 'e.g. Nutritionist, Parent, Coach',
           ),
-          SizedBox(height: AppTheme.spaceSM),
+          const SizedBox(height: AppTheme.spaceSM),
           _buildFilledField(
             controller: _motivationController,
             label: 'Motivation',
@@ -1064,7 +1099,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
             minLines: 2,
             maxLines: 4,
           ),
-          SizedBox(height: AppTheme.spaceMD),
+          const SizedBox(height: AppTheme.spaceMD),
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton.icon(
@@ -1080,7 +1115,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primaryPurple,
                 foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(
+                padding: const EdgeInsets.symmetric(
                   horizontal: AppTheme.spaceLG,
                   vertical: AppTheme.spaceSM,
                 ),
@@ -1125,8 +1160,8 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
 
   Widget _buildPreferenceCard() {
     return GustCard(
-      margin: EdgeInsets.only(bottom: AppTheme.spaceLG),
-      padding: EdgeInsets.all(AppTheme.spaceLG),
+      margin: const EdgeInsets.only(bottom: AppTheme.spaceLG),
+      padding: const EdgeInsets.all(AppTheme.spaceLG),
       gradient: const LinearGradient(
         colors: [Color(0xFFF8F4FF), Colors.white],
         begin: Alignment.topLeft,
@@ -1142,12 +1177,14 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(
-              _preference ? Icons.toggle_on_outlined : Icons.toggle_off_outlined,
+              _preference
+                  ? Icons.toggle_on_outlined
+                  : Icons.toggle_off_outlined,
               color: AppTheme.primaryPurple,
               size: 32,
             ),
           ),
-          SizedBox(width: AppTheme.spaceMD),
+          const SizedBox(width: AppTheme.spaceMD),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1181,8 +1218,8 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
 
   Widget _buildRequestForm() {
     return GustCard(
-      margin: EdgeInsets.only(bottom: AppTheme.spaceLG),
-      padding: EdgeInsets.all(AppTheme.spaceLG),
+      margin: const EdgeInsets.only(bottom: AppTheme.spaceLG),
+      padding: const EdgeInsets.all(AppTheme.spaceLG),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1195,9 +1232,10 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
                   color: AppTheme.infoBlue.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(Icons.swap_horiz_outlined, color: AppTheme.infoBlue),
+                child: const Icon(Icons.swap_horiz_outlined,
+                    color: AppTheme.infoBlue),
               ),
-              SizedBox(width: AppTheme.spaceMD),
+              const SizedBox(width: AppTheme.spaceMD),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1221,7 +1259,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
               ),
             ],
           ),
-          SizedBox(height: AppTheme.spaceMD),
+          const SizedBox(height: AppTheme.spaceMD),
           TextField(
             controller: _ownerSearchController,
             onChanged: _onOwnerSearchChanged,
@@ -1249,13 +1287,13 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
             ),
           ),
           if (_selectedOwner != null) ...[
-            SizedBox(height: AppTheme.spaceSM),
+            const SizedBox(height: AppTheme.spaceSM),
             Container(
               decoration: BoxDecoration(
                 color: AppTheme.accentTeal.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
               ),
-              padding: EdgeInsets.symmetric(
+              padding: const EdgeInsets.symmetric(
                 horizontal: AppTheme.spaceMD,
                 vertical: AppTheme.spaceXS,
               ),
@@ -1263,7 +1301,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.check_circle, color: AppTheme.accentTeal),
-                  SizedBox(width: AppTheme.spaceXS),
+                  const SizedBox(width: AppTheme.spaceXS),
                   Text(
                     _selectedOwner!.displayName,
                     style: const TextStyle(fontWeight: FontWeight.w600),
@@ -1277,7 +1315,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
             ),
           ],
           if (_ownerSuggestions.isNotEmpty) ...[
-            SizedBox(height: AppTheme.spaceSM),
+            const SizedBox(height: AppTheme.spaceSM),
             Text(
               'Tap to choose a collaborator',
               style: Theme.of(context)
@@ -1285,14 +1323,15 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
                   .bodySmall
                   ?.copyWith(color: AppTheme.textSecondary),
             ),
-            SizedBox(height: AppTheme.spaceXS),
+            const SizedBox(height: AppTheme.spaceXS),
             Wrap(
               spacing: AppTheme.spaceSM,
               runSpacing: AppTheme.spaceXS,
               children: _ownerSuggestions.map<Widget>((suggestion) {
                 final bool selected = _selectedOwner?.id == suggestion.id;
                 return ChoiceChip(
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  labelPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   label: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1314,23 +1353,23 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
               }).toList(),
             ),
           ],
-          SizedBox(height: AppTheme.spaceSM),
+          const SizedBox(height: AppTheme.spaceSM),
           Container(
             width: double.infinity,
-            padding: EdgeInsets.all(AppTheme.spaceMD),
+            padding: const EdgeInsets.all(AppTheme.spaceMD),
             decoration: BoxDecoration(
               color: AppTheme.backgroundGrey.withOpacity(0.6),
               borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
             ),
-            child: Row(
+            child: const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.bar_chart, color: AppTheme.primaryPurple),
+                Icon(Icons.bar_chart, color: AppTheme.primaryPurple),
                 SizedBox(width: AppTheme.spaceSM),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
+                    children: [
                       Text(
                         'Analytics access',
                         style: TextStyle(
@@ -1352,7 +1391,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
               ],
             ),
           ),
-          SizedBox(height: AppTheme.spaceMD),
+          const SizedBox(height: AppTheme.spaceMD),
           Align(
             alignment: Alignment.centerRight,
             child: ElevatedButton.icon(
@@ -1371,7 +1410,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
                 ),
-                padding: EdgeInsets.symmetric(
+                padding: const EdgeInsets.symmetric(
                   horizontal: AppTheme.spaceLG,
                   vertical: AppTheme.spaceSM,
                 ),
@@ -1384,7 +1423,8 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
   }
 
   Widget _buildIncomingSection() {
-    final pending = _incoming.where((entry) => entry.status == 'PENDING').toList();
+    final pending =
+        _incoming.where((entry) => entry.status == 'PENDING').toList();
     if (pending.isEmpty) {
       return _buildEmptyState(
         'No pending approvals',
@@ -1404,8 +1444,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
                 icon: Icons.mail_rounded,
                 color: AppTheme.warningOrange,
                 title: entry.partnerName,
-                subtitle:
-                    '${_friendlyModule(entry.module)} - ${entry.status}',
+                subtitle: '${_friendlyModule(entry.module)} - ${entry.status}',
                 trailing: Wrap(
                   spacing: AppTheme.spaceSM,
                   children: [
@@ -1447,8 +1486,7 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
                 icon: Icons.outbox_rounded,
                 color: AppTheme.infoBlue,
                 title: entry.ownerName,
-                subtitle:
-                    '${_friendlyModule(entry.module)} - ${entry.status}',
+                subtitle: '${_friendlyModule(entry.module)} - ${entry.status}',
               ),
             )
             .toList(),
@@ -1469,36 +1507,33 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
       icon: Icons.handshake_outlined,
       accent: AppTheme.successGreen,
       child: Column(
-        children: _assignments
-            .map(
-              (entry) {
-                final isPartner = role == 'PARTNER';
-                Widget? trailing;
-                if (isPartner && entry.status == 'APPROVED') {
-                  if (entry.module == 'SUGAR_LOGS') {
-                    trailing = TextButton(
-                      onPressed: () => _viewSharedLogs(entry),
-                      child: const Text('View logs'),
-                    );
-                  } else if (entry.module == 'ANALYTICS') {
-                    trailing = TextButton(
-                      onPressed: () => _openPartnerAnalytics(entry),
-                      child: const Text('View analytics'),
-                    );
-                  }
-                }
-
-                return _buildEntryTile(
-                  icon: Icons.handshake_rounded,
-                  color: AppTheme.successGreen,
-                  title: isPartner ? entry.ownerName : entry.partnerName,
-                  subtitle:
-                      '${_friendlyModule(entry.module)} - ${entry.status}',
-                  trailing: trailing,
+        children: _assignments.map(
+          (entry) {
+            final isPartner = role == 'PARTNER';
+            Widget? trailing;
+            if (isPartner && entry.status == 'APPROVED') {
+              if (entry.module == 'SUGAR_LOGS') {
+                trailing = TextButton(
+                  onPressed: () => _viewSharedLogs(entry),
+                  child: const Text('View logs'),
                 );
-              },
-            )
-            .toList(),
+              } else if (entry.module == 'ANALYTICS') {
+                trailing = TextButton(
+                  onPressed: () => _openPartnerAnalytics(entry),
+                  child: const Text('View analytics'),
+                );
+              }
+            }
+
+            return _buildEntryTile(
+              icon: Icons.handshake_rounded,
+              color: AppTheme.successGreen,
+              title: isPartner ? entry.ownerName : entry.partnerName,
+              subtitle: '${_friendlyModule(entry.module)} - ${entry.status}',
+              trailing: trailing,
+            );
+          },
+        ).toList(),
       ),
     );
   }
@@ -1511,83 +1546,171 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
     Color? accent,
   }) {
     final Color chipColor = accent ?? AppTheme.primaryPurple;
-    return GustCard(
-      margin: EdgeInsets.only(bottom: AppTheme.spaceLG),
-      padding: EdgeInsets.all(AppTheme.spaceLG),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (icon != null)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: chipColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(icon, color: chipColor),
-                ),
-              if (icon != null) SizedBox(width: AppTheme.spaceMD),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: AppTheme.textSecondary),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppTheme.spaceLG),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            chipColor.withOpacity(0.02),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: chipColor.withOpacity(0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
-          SizedBox(height: AppTheme.spaceMD),
-          child,
         ],
+        border: Border.all(
+          color: chipColor.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppTheme.spaceLG),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (icon != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          chipColor,
+                          chipColor.withOpacity(0.7),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: chipColor.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 20),
+                  ),
+                if (icon != null) const SizedBox(width: AppTheme.spaceMD),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          color: Color(0xFF2D1B47),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: chipColor.withOpacity(0.8),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppTheme.spaceMD),
+            child,
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildEmptyState(String title, String subtitle) {
-    return GustCard(
-      margin: EdgeInsets.only(bottom: AppTheme.spaceLG),
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppTheme.spaceLG),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            AppTheme.infoBlue.withOpacity(0.03),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(
+          color: AppTheme.infoBlue.withOpacity(0.15),
+          width: 1,
+        ),
+      ),
+      padding: const EdgeInsets.all(AppTheme.spaceLG),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: EdgeInsets.all(AppTheme.spaceSM),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppTheme.dividerGrey.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(12),
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.infoBlue.withOpacity(0.15),
+                  AppTheme.infoBlue.withOpacity(0.08),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.infoBlue.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            child: const Icon(Icons.info_outline_rounded),
+            child: Icon(
+              Icons.info_outline_rounded,
+              color: AppTheme.infoBlue,
+              size: 28,
+            ),
           ),
-          SizedBox(width: AppTheme.spaceMD),
+          const SizedBox(width: AppTheme.spaceMD),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: Theme.of(context).textTheme.titleMedium),
-                SizedBox(height: AppTheme.spaceXS),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF2D1B47),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spaceXS),
                 Text(
                   subtitle,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppTheme.textSecondary,
-                      ),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[600],
+                    height: 1.4,
+                  ),
                 ),
               ],
             ),
@@ -1604,24 +1727,75 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
     required String subtitle,
     Widget? trailing,
   }) {
-    return GustCard(
-      margin: EdgeInsets.only(bottom: AppTheme.spaceSM),
-      padding: EdgeInsets.symmetric(
-        horizontal: AppTheme.spaceMD,
-        vertical: AppTheme.spaceSM,
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppTheme.spaceSM),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: Border.all(
+          color: color.withOpacity(0.1),
+          width: 1,
+        ),
       ),
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: CircleAvatar(
-          backgroundColor: color.withOpacity(0.15),
-          child: Icon(icon, color: color),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppTheme.spaceMD,
+          vertical: AppTheme.spaceSM,
         ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w600),
+        child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  color.withOpacity(0.15),
+                  color.withOpacity(0.08),
+                ],
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.2),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          title: Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              color: Color(0xFF2D1B47),
+            ),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[600],
+              ),
+            ),
+          ),
+          trailing: trailing,
         ),
-        subtitle: Text(subtitle),
-        trailing: trailing,
       ),
     );
   }
@@ -1664,11 +1838,27 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
   }) {
     return Row(
       children: [
-        CircleAvatar(
-          backgroundColor: color.withOpacity(0.1),
-          child: Icon(icon, color: color),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                color.withOpacity(0.15),
+                color.withOpacity(0.08),
+              ],
+            ),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(icon, color: color, size: 24),
         ),
-        SizedBox(width: AppTheme.spaceMD),
+        const SizedBox(width: AppTheme.spaceMD),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1678,13 +1868,18 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
                 children: [
                   Text(
                     label,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: Color(0xFF2D1B47),
+                    ),
                   ),
                   Text(
                     value,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 17,
+                      color: color,
                     ),
                   ),
                 ],
@@ -1692,10 +1887,78 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AppTheme.textSecondary),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInsightRowCompact({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required String value,
+    required String subtitle,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                color.withOpacity(0.15),
+                color.withOpacity(0.08),
+              ],
+            ),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(icon, color: color, size: 24),
+        ),
+        const SizedBox(width: AppTheme.spaceMD),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: Color(0xFF2D1B47),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 13,
+                  height: 1.3,
+                ),
               ),
             ],
           ),
@@ -1713,6 +1976,100 @@ class _PartnerAccessPageState extends State<PartnerAccessPage> {
       default:
         return 'Daily logbook';
     }
+  }
+
+  Widget _sectionCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Widget child,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppTheme.spaceLG),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            AppTheme.primaryPurple.withOpacity(0.02),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryPurple.withOpacity(0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+        border: Border.all(
+          color: AppTheme.primaryPurple.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppTheme.spaceLG),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFF6A1B9A),
+                        Color(0xFF8E24AA),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primaryPurple.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: AppTheme.spaceMD),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          color: Color(0xFF2D1B47),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.purple[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppTheme.spaceMD),
+            child,
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -1754,7 +2111,7 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(
+      padding: const EdgeInsets.symmetric(
         horizontal: AppTheme.spaceMD,
         vertical: AppTheme.spaceXS,
       ),
@@ -1767,7 +2124,7 @@ class _StatusChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 16, color: color),
-          SizedBox(width: AppTheme.spaceXS),
+          const SizedBox(width: AppTheme.spaceXS),
           Text(
             label,
             style: TextStyle(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -12,6 +13,11 @@ import 'package:provider/provider.dart';
 import 'services/partner_access_api.dart';
 import 'state/auth_state.dart';
 import 'services/auth_helper.dart';
+import 'services/connectivity_service.dart';
+import 'services/local_analytics_service.dart';
+import 'data/local/gust_database.dart';
+import 'repositories/auth_repository.dart';
+import 'services/api_service.dart';
 
 // Add for file download:
 import 'dart:io' as io;
@@ -27,10 +33,10 @@ const List<String> monthOrder = [
 /// You can customize these time slots and their emoji here:
 const List<String> timeSlots = ["Morning", "Afternoon", "Evening", "Night"];
 const Map<String, String> timeSlotEmojis = {
-  "Morning": "??",
-  "Afternoon": "???",
-  "Evening": "??",
-  "Night": "??",
+  "Morning": "🌅",
+  "Afternoon": "🏙️",
+  "Evening": "🌆",
+  "Night": "🌃",
 };
 
 String getEmotionEmoji(String? label) {
@@ -128,11 +134,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
   String _viewMode = 'overall'; // 'overall', 'emotions', 'timeOfDay'
   DateTime _startDate = DateTime.now().subtract(const Duration(days: 30));
   DateTime _endDate = DateTime.now();
-  final PartnerAccessApi _partnerApi = PartnerAccessApi();
+  final PartnerAccessApi _partnerApi = const PartnerAccessApi();
   List<PartnerAccessEntry> _analyticsOwners = [];
   int? _selectedOwnerId;
   String? _selectedOwnerName;
   bool _loadingPartnerOwners = false;
+
+  StreamSubscription? _connectivitySub;
 
   @override
   void initState() {
@@ -145,6 +153,22 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     // Load initial data with custom date range (last 30 days by default)
     _fetchCustomData();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadPartnerAssignments());
+
+    // Listen for connectivity restoration to retry fetching data
+    _connectivitySub = ConnectivityService.instance.onConnectivityRestored.listen((_) {
+      print('AnalyticsPage: Connectivity restored, refreshing data...');
+      if (mounted) {
+        _fetchTabData();
+        _loadPartnerAssignments();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    _tabController.dispose();
+    super.dispose();
   }
   // Fetch data based on custom date range and view mode
   Future<void> _fetchCustomData() async {
@@ -155,11 +179,12 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     });
     
     final token = await _getToken();
-    if (token == null) {
-      setState(() {
-        _loading = false;
-        _error = 'Not authenticated';
-      });
+    
+    // OFFLINE FALLBACK LOGIC
+    if (token == null || ApiService.instance.isOfflineSync) {
+      print('AnalyticsPage: Offline mode or no token, using local data');
+      await _fetchLocalCustomData();
+      setState(() => _loading = false);
       return;
     }
 
@@ -175,9 +200,91 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
         await _fetchTimeDataForRange(token);
       }
     } catch (e) {
-      setState(() => _error = 'Error: $e');
+      print('AnalyticsPage: API error ($e), falling back to local data');
+      await _fetchLocalCustomData();
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _fetchLocalCustomData() async {
+    try {
+      final user = await AuthRepository().getActiveUser();
+      if (user?.id == null) {
+        setState(() => _error = 'Not authenticated');
+        return;
+      }
+
+      // Fetch all logs for the user
+      // Note: We might want to optimize this to fetch only needed range if DB supports it,
+      // but fetchLogs gets everything currently.
+      final allLogs = await GustDatabase.instance.fetchLogs(userId: user!.id!);
+      
+      // Filter by date range
+      final filteredLogs = allLogs.where((log) {
+        // Reset time part for accurate date comparison
+        final logDate = DateTime(log.date.year, log.date.month, log.date.day);
+        final start = DateTime(_startDate.year, _startDate.month, _startDate.day);
+        final end = DateTime(_endDate.year, _endDate.month, _endDate.day);
+        return !logDate.isBefore(start) && !logDate.isAfter(end);
+      }).toList();
+
+      List<AnalyticsResponse> result = [];
+
+      if (_viewMode == 'overall') {
+        // We need to group by day across the range
+        // Reuse the logic from LocalAnalyticsService but adapted for a range
+        // Actually, computeDailyTrend is per month.
+        // Let's just group manually here or add a range method to service.
+        // For simplicity, let's group here using the filtered logs.
+        final Map<String, double> dailyTotals = {};
+        for (final log in filteredLogs) {
+           final dateKey = log.date.toIso8601String().substring(0, 10);
+           dailyTotals[dateKey] = (dailyTotals[dateKey] ?? 0) + log.sugarGrams;
+        }
+        result = dailyTotals.entries.map((e) => AnalyticsResponse(
+          label: e.key,
+          value: e.value,
+        )).toList();
+
+      } else if (_viewMode == 'emotions') {
+        // Reuse service logic? computeEmotionSummary is per month.
+        // Let's compute for the filtered range directly.
+        final Map<String, double> emotionTotals = {};
+        final Map<String, int> emotionCounts = {};
+
+        for (final log in filteredLogs) {
+          final emotion = log.emotion;
+          emotionTotals[emotion] = (emotionTotals[emotion] ?? 0) + log.sugarGrams;
+          emotionCounts[emotion] = (emotionCounts[emotion] ?? 0) + 1;
+        }
+
+        result = emotionTotals.entries.map((entry) {
+          final emotion = entry.key;
+          final totalSugar = entry.value;
+          final count = emotionCounts[emotion] ?? 1;
+          final average = totalSugar / count;
+
+          return AnalyticsResponse(
+            label: emotion,
+            value: totalSugar,
+            detail: 'Avg: ${average.toStringAsFixed(1)}g per time | ${count}x logged',
+          );
+        }).toList();
+
+      } else if (_viewMode == 'timeOfDay') {
+        result = LocalAnalyticsService.computeTimeOfDayPattern(filteredLogs);
+      }
+
+      setState(() {
+        _data = result;
+        _error = null; // Clear error if local fetch succeeds
+      });
+
+    } catch (e) {
+      setState(() => _error = 'Failed to load local data: $e');
     }
   }
 
@@ -354,7 +461,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
       return AnalyticsResponse(
         label: e.key,
         value: total, // Total for the period
-        detail: 'Avg: ${avgPerDay.toStringAsFixed(1)}g per day | ${daysWithData} days',
+        detail: 'Avg: ${avgPerDay.toStringAsFixed(1)}g per day | $daysWithData days',
       );
     }).toList();
     
@@ -539,7 +646,17 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
       _data = [];
     });
     final token = await _getToken();
-    if (token == null) return;
+    
+    // OFFLINE FALLBACK LOGIC
+    if (token == null || ApiService.instance.isOfflineSync) {
+      print('AnalyticsPage: Offline mode or no token, using local data for tab');
+      await _fetchLocalTabData();
+      setState(() {
+        _loading = false;
+        _showContent = true;
+      });
+      return;
+    }
 
     String endpoint = '';
     Map<String, String> params = {};
@@ -589,12 +706,56 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
         setState(() => _error = resp.body);
       }
     } catch (e) {
-      setState(() => _error = 'Failed to load data');
+      print('AnalyticsPage: API error ($e), falling back to local data for tab');
+      await _fetchLocalTabData();
     } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _showContent = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _fetchLocalTabData() async {
+    try {
+      final user = await AuthRepository().getActiveUser();
+      if (user?.id == null) {
+        setState(() => _error = 'Not authenticated');
+        return;
+      }
+
+      final allLogs = await GustDatabase.instance.fetchLogs(userId: user!.id!);
+      List<AnalyticsResponse> result = [];
+
+      switch (_tabController.index) {
+        case 0: // Daily Trend
+          result = LocalAnalyticsService.computeDailyTrend(allLogs, selectedMonth, selectedYear);
+          break;
+        case 1: // Emotion Summary
+          result = LocalAnalyticsService.computeEmotionSummary(allLogs, selectedMonth, selectedYear);
+          break;
+        case 2: // Time of Day (Today)
+          // Filter for just today
+          final todayLogs = allLogs.where((log) => 
+            log.date.year == _currentDay.year &&
+            log.date.month == _currentDay.month &&
+            log.date.day == _currentDay.day
+          ).toList();
+          result = LocalAnalyticsService.computeTimeOfDayPattern(todayLogs);
+          break;
+        case 3: // Monthly Total
+          result = LocalAnalyticsService.computeMonthlyTotal(allLogs);
+          break;
+      }
+
       setState(() {
-        _loading = false;
-        _showContent = true;
+        _data = result;
+        _error = null;
       });
+    } catch (e) {
+      setState(() => _error = 'Failed to load local data: $e');
     }
   }
   
@@ -1237,8 +1398,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                 },
               ),
             ),
-            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
           gridData: FlGridData(
             show: true,
@@ -1375,13 +1536,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                         toY: sortedData[i].value,
                         width: 24,
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                        gradient: LinearGradient(
+                        gradient: const LinearGradient(
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
                           colors: [
-                            const Color(0xFF6A1B9A),
-                            const Color(0xFF8E24AA),
-                            const Color(0xFFAB47BC),
+                            Color(0xFF6A1B9A),
+                            Color(0xFF8E24AA),
+                            Color(0xFFAB47BC),
                           ],
                         ),
                         backDrawRodData: BackgroundBarChartRodData(
@@ -1394,7 +1555,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                   ),
               ],
               titlesData: FlTitlesData(
-                bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 leftTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
@@ -1412,8 +1573,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                     },
                   ),
                 ),
-                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
               ),
               gridData: FlGridData(
                 show: true,
@@ -1650,8 +1811,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
     final goalRate = (daysWithinGoal / daysTracked * 100).round();
     
     return [
-      _buildStatTile("${daysTracked} Days", "${avg.toStringAsFixed(1)}g", subtitle: "Daily Avg"),
-      _buildStatTile("${goalRate}% On Track", "${total.toStringAsFixed(0)}g", subtitle: "Total Sugar"),
+      _buildStatTile("$daysTracked Days", "${avg.toStringAsFixed(1)}g", subtitle: "Daily Avg"),
+      _buildStatTile("$goalRate% On Track", "${total.toStringAsFixed(0)}g", subtitle: "Total Sugar"),
       _buildStatTile("Best Day", "${minValue.toStringAsFixed(1)}g", subtitle: "Lowest"),
       _buildStatTile("Worst Day", "${maxValue.toStringAsFixed(1)}g", subtitle: "Highest"),
     ];
@@ -2558,128 +2719,131 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // View Mode Selector
-          const Text(
-            '📊 View Mode',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF2D1B47),
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // View Mode Selector
+            const Text(
+              '📊 View Mode',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF2D1B47),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildViewModeChip('overall', 'Overall Intake', Icons.show_chart),
-              _buildViewModeChip('emotions', 'By Emotions', Icons.emoji_emotions),
-              _buildViewModeChip('timeOfDay', 'By Time of Day', Icons.access_time),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(height: 1),
-          const SizedBox(height: 16),
-          
-          // Date Range Selector
-          const Text(
-            '📅 Time Period',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF2D1B47),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildViewModeChip('overall', 'Overall Intake', Icons.show_chart),
+                _buildViewModeChip('emotions', 'By Emotions', Icons.emoji_emotions),
+                _buildViewModeChip('timeOfDay', 'By Time of Day', Icons.access_time),
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-          
-          // Quick date range buttons
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildQuickDateButton('Today', 0),
-              _buildQuickDateButton('Last 7 Days', 7),
-              _buildQuickDateButton('Last 30 Days', 30),
-              _buildQuickDateButton('This Year', -1),
-            ],
-          ),
-          const SizedBox(height: 12),
-          
-          // Custom date pickers
-          Row(
-            children: [
-              Expanded(
-                child: _buildDatePickerButton(
-                  'From',
-                  _startDate,
-                  (date) {
-                    setState(() {
-                      _startDate = date;
-                      if (_startDate.isAfter(_endDate)) {
-                        _endDate = _startDate;
-                      }
-                    });
-                  },
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+            
+            // Date Range Selector
+            const Text(
+              '📅 Time Period',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF2D1B47),
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            // Quick date range buttons
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildQuickDateButton('Today', 0),
+                _buildQuickDateButton('Last 7 Days', 7),
+                _buildQuickDateButton('Last 30 Days', 30),
+                _buildQuickDateButton('This Year', -1),
+              ],
+            ),
+            const SizedBox(height: 12),
+            
+            // Custom date pickers
+            Row(
+              children: [
+                Expanded(
+                  child: _buildDatePickerButton(
+                    'From',
+                    _startDate,
+                    (date) {
+                      setState(() {
+                        _startDate = date;
+                        if (_startDate.isAfter(_endDate)) {
+                          _endDate = _startDate;
+                        }
+                      });
+                    },
+                  ),
                 ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: Icon(Icons.arrow_forward, color: Color(0xFF6A1B9A), size: 20),
-              ),
-              Expanded(
-                child: _buildDatePickerButton(
-                  'To',
-                  _endDate,
-                  (date) {
-                    setState(() {
-                      _endDate = date;
-                      if (_endDate.isBefore(_startDate)) {
-                        _startDate = _endDate;
-                      }
-                    });
-                  },
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Icon(Icons.arrow_forward, color: Color(0xFF6A1B9A), size: 20),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          
-          // Apply Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _loading ? null : _fetchCustomData,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6A1B9A),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                Expanded(
+                  child: _buildDatePickerButton(
+                    'To',
+                    _endDate,
+                    (date) {
+                      setState(() {
+                        _endDate = date;
+                        if (_endDate.isBefore(_startDate)) {
+                          _startDate = _endDate;
+                        }
+                      });
+                    },
+                  ),
                 ),
-                elevation: 2,
-              ),
-              child: _loading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Apply Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _loading ? null : _fetchCustomData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6A1B9A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 2,
+                ),
+                child: _loading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Update Chart',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    )
-                  : const Text(
-                      'Update Chart',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2880,9 +3044,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                     color: Color(0xFF6A1B9A),
                   ),
                   const SizedBox(height: 12),
-                  Text(
+                  const Text(
                     'No data for selected period',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF2D1B47),
@@ -3258,13 +3422,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                         toY: sortedData[i].value,
                         width: 30,
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                        gradient: LinearGradient(
+                        gradient: const LinearGradient(
                           begin: Alignment.bottomCenter,
                           end: Alignment.topCenter,
                           colors: [
-                            const Color(0xFF6A1B9A),
-                            const Color(0xFF8E24AA),
-                            const Color(0xFFAB47BC),
+                            Color(0xFF6A1B9A),
+                            Color(0xFF8E24AA),
+                            Color(0xFFAB47BC),
                           ],
                         ),
                         backDrawRodData: BackgroundBarChartRodData(
@@ -3277,7 +3441,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                   ),
               ],
               titlesData: FlTitlesData(
-                bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 leftTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
@@ -3295,8 +3459,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> with SingleTickerProvider
                     },
                   ),
                 ),
-                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
               ),
               gridData: FlGridData(
                 show: true,
