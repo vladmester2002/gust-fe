@@ -1,3 +1,5 @@
+import '../../utils/input_sanitizer.dart';
+
 class LocalSugarLog {
   final int? id;
   final int? remoteId;
@@ -73,42 +75,44 @@ class LocalSugarLog {
     );
   }
 
+  /// Converts to database map with sanitized string values.
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'remote_id': remoteId,
       'user_id': userId,
-      'sugar_grams': sugarGrams,
+      'sugar_grams': sugarGrams.clamp(0, 9999),
       'date': date.toIso8601String(),
-      'hour': hour,
-      'minute': minute,
-      'product_name': productName,
-      'sugar_type': sugarType,
-      'context_note': contextNote,
-      'emotion': emotion,
-      'location': location,
+      'hour': hour.clamp(0, 23),
+      'minute': minute.clamp(0, 59),
+      'product_name': InputSanitizer.sanitizeProductName(productName),
+      'sugar_type': InputSanitizer.sanitizeText(sugarType, maxLength: 100),
+      'context_note': InputSanitizer.sanitizeNotes(contextNote),
+      'emotion': InputSanitizer.sanitizeText(emotion, maxLength: 20),
+      'location': InputSanitizer.sanitizeText(location, maxLength: 200),
       'was_craving': wasCraving ? 1 : 0,
-      'visibility': visibility,
+      'visibility': InputSanitizer.sanitizeText(visibility, maxLength: 30),
       'is_dirty': isDirty ? 1 : 0,
       'synced_at': syncedAt?.toIso8601String(),
     };
   }
 
+  /// Converts to API request map with sanitized string values.
   Map<String, dynamic> toApiMap() {
     return {
       // ID is not sent for creation, but might be needed for updates if backend requires it in body
       // 'id': remoteId, 
-      'sugarGrams': sugarGrams,
+      'sugarGrams': sugarGrams.clamp(0, 9999),
       'date': date.toIso8601String().substring(0, 10), // YYYY-MM-DD
-      'hour': hour,
-      'minute': minute,
-      'productName': productName,
-      'sugarType': sugarType,
-      'contextNote': contextNote,
-      'emotion': emotion,
-      'location': location,
+      'hour': hour.clamp(0, 23),
+      'minute': minute.clamp(0, 59),
+      'productName': InputSanitizer.sanitizeProductName(productName),
+      'sugarType': InputSanitizer.sanitizeText(sugarType, maxLength: 100),
+      'contextNote': InputSanitizer.sanitizeNotes(contextNote),
+      'emotion': InputSanitizer.sanitizeText(emotion, maxLength: 20),
+      'location': InputSanitizer.sanitizeText(location, maxLength: 200),
       'wasCraving': wasCraving,
-      'visibility': visibility,
+      'visibility': InputSanitizer.sanitizeText(visibility, maxLength: 30),
     };
   }
 
