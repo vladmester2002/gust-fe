@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "625687106738",
+    "project_id": "gust-a84cd",
+    "storage_bucket": "gust-a84cd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:625687106738:android:9d5279155fed6d0f4425ab",
+        "android_client_info": {
+          "package_name": "com.gust.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "625687106738-7b3227uep3ebd3us8g96sdto9oorg46u.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.gust.app",
+            "certificate_hash": "53d5ba7d28cf6977aeda09864bac21969b22d9a1"
+          }
+        },
+        {
+          "client_id": "625687106738-uuni4ilvl1a28ooek3t3n4lvesbn9f6b.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBCUii5_z-i8sSwCuqeX11PeORjWrWC_OQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "625687106738-uuni4ilvl1a28ooek3t3n4lvesbn9f6b.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

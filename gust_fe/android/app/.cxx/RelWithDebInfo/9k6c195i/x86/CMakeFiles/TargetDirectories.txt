@@ -1,0 +1,2 @@
+C:/Users/vladi/GUST_app/gust-fe/gust_fe/android/app/.cxx/RelWithDebInfo/9k6c195i/x86/CMakeFiles/edit_cache.dir
+C:/Users/vladi/GUST_app/gust-fe/gust_fe/android/app/.cxx/RelWithDebInfo/9k6c195i/x86/CMakeFiles/rebuild_cache.dir
